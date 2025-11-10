@@ -1,0 +1,19 @@
+{
+  "name": "tog-refusjon",
+  "version": "0.1.0",
+  "description": "Automatisk refusjonsapp for togreiser",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "keywords": [
+    "tog",
+    "refusjon",
+    "togreiser"
+  ],
+  "author": "",
+  "license": "ISC"
+}
