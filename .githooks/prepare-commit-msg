@@ -1,12 +1,48 @@
-#!/bin/bash
-# Auto-setter TR-ID i commit-melding hvis en fil med ID er aktiv i editoren.
+#!/usr/bin/env bash
+# Smart commit hook for Tog Refusjon / ClaimPilot
+# - Automatisk henter oppgave-ID fra branch-navn (TR-... / CP-...)
+# - Setter riktig commit-type (feat, fix, chore, etc.)
+# - Hopper over merge/squash commits
 
-# Finn siste endrede filnavn med TR- eller CP-ID i navnet
-ID=$(git diff --cached --name-only | grep -oE '(TR|CP)-[A-Z]+-[0-9]+' | head -n 1)
+MSG_FILE="$1"
+COMMIT_SOURCE="$2"
 
-if [ -n "$ID" ]; then
-  # Sett inn linje øverst i commit-meldingen hvis ikke allerede der
-  if ! grep -q "$ID" "$1"; then
-    sed -i.bak "1s|^|feat($ID): |\n|" "$1"
-  fi
+# 1) Ikke rør ved merge, squash eller template commits
+case "$COMMIT_SOURCE" in
+  merge|squash|template) exit 0 ;;
+esac
+
+# 2) Ikke rør hvis meldingen allerede følger konvensjonen
+if grep -Eq '^(feat|fix|refactor|style|chore|test|docs)\((TR|CP)-[A-Z]+-[0-9]+\):' "$MSG_FILE"; then
+  exit 0
 fi
+
+# 3) Hent branch-navn
+BRANCH="$(git symbolic-ref --short HEAD 2>/dev/null || true)"
+
+# 4) Finn commit-type (før første '/')
+TYPE="$(echo "$BRANCH" | awk -F/ '{print $1}')"
+case "$TYPE" in
+  feat|fix|refactor|style|chore|test|docs) ;;
+  *) TYPE="feat" ;;  # fallback
+esac
+
+# 5) Finn oppgave-ID i branch-navnet
+ID="$(echo "$BRANCH" | grep -oE '(TR|CP)-[A-Z]+-[0-9]+' | head -n 1)"
+
+# 6) Hvis ingen ID i branch, prøv å finne i staged filer
+if [ -z "$ID" ]; then
+  ID="$(git diff --cached --name-only | grep -oE '(TR|CP)-[A-Z]+-[0-9]+' | head -n 1)"
+fi
+
+# 7) Legg til konvensjonell commit-linje hvis ID finnes
+if [ -n "$ID" ]; then
+  FIRST_LINE="$(head -n1 "$MSG_FILE")"
+  if ! echo "$FIRST_LINE" | grep -Eq "^(feat|fix|refactor|style|chore|test|docs)\($ID\):"; then
+    { echo "$TYPE($ID): "; cat "$MSG_FILE"; } > "${MSG_FILE}.tmp" && mv "${MSG_FILE}.tmp" "$MSG_FILE"
+  fi
+else
+  echo "⚠️  Ingen TR/CP-ID funnet i branch eller staged filer – commit beholdes uendret." >&2
+fi
+
+exit 0
