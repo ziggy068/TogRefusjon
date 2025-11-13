@@ -1,0 +1,12 @@
+#!/bin/bash
+# Auto-setter TR-ID i commit-melding hvis en fil med ID er aktiv i editoren.
+
+# Finn siste endrede filnavn med TR- eller CP-ID i navnet
+ID=$(git diff --cached --name-only | grep -oE '(TR|CP)-[A-Z]+-[0-9]+' | head -n 1)
+
+if [ -n "$ID" ]; then
+  # Sett inn linje øverst i commit-meldingen hvis ikke allerede der
+  if ! grep -q "$ID" "$1"; then
+    sed -i.bak "1s|^|feat($ID): |\n|" "$1"
+  fi
+fi
