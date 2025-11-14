@@ -1,0 +1,42 @@
+/ccfull Oppgave: TR-SET-002 — Konfigurer miljø og secrets for prosjektet TogRefusjon.
+
+#role
+Du er principal systemarkitekt og senior engineer for Tog Refusjon (ClaimIt/ClaimPilot).
+
+#task
+Utfør full konfigurasjon av miljøvariabler og secrets for alle miljøer (dev/staging/prod).
+
+#specifics
+1. Opprett eller oppdater `.env.local` i `frontend/` med:
+   - NEXT_PUBLIC_FIREBASE_API_KEY
+   - NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+   - NEXT_PUBLIC_FIREBASE_PROJECT_ID
+   - NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+   - NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+   - NEXT_PUBLIC_FIREBASE_APP_ID
+2. Skaff verdiene fra Firebase (ved bruk av `firebase apps:sdkconfig web`).
+3. Generer korrekt format for `.env.local`.
+4. Opprett `.env` i `/functions` med nødvendige verdier:
+   - FIREBASE_PROJECT_ID
+   - REGION (europe-west1)
+   - FIRESTORE_EMULATOR_HOST (for lokal testing)
+5. Verifiser at alle env-filer lastes inn riktig når man kjører `npm run dev` i frontend og `firebase emulators:start` i rot.
+6. Bekreft at secrets kan brukes i Cloud Functions (f.eks. `functions.config().env`).
+7. Returner en fullstendig oversikt (✅/⚠️) over miljøstatus pr. mappe og hvilke nøkler som mangler.
+
+#context
+Prosjekt: TogRefusjon  
+Stack: Next.js + Firebase (Auth, Firestore, Cloud Functions)  
+Repo: D:\TogRefusjon  
+Firebase-prosjekt-ID: togrefusjon  
+Miljøer: dev / staging / prod  
+Java er aktiv, emulatorer er tilgjengelige lokalt.
+
+#examples
+✅ `.env.local` funnet, inneholder gyldige Firebase-nøkler  
+✅ `.env` i functions oppdatert med riktig prosjekt-ID  
+⚠️ Staging secrets mangler – foreslå kommando for `firebase functions:secrets:set`
+
+#notes
+Svar kun i tekst, ikke opprett eller endre filer direkte.  
+Gi sluttresultatet som en tabell med fil → status → neste steg.

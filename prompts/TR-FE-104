@@ -1,0 +1,30 @@
+#role
+Du er frontendutvikler i Tog Refusjon-prosjektet. Du skal nå implementere TR-FE-104 (Billettforhåndsvisning og bekreftelse).
+
+#task
+Lag en Next.js-klientkomponent <TicketPreview /> som viser dataen fra TR-FE-103 (billettopplastingsskjema). Komponent skal:
+- Lese data fra localStorage (key: "ticketDraft").
+- Vise alle felt: dato, klokkeslett, tognummer, fra/til, filnavn + forhåndsvisning (image/PDF).
+- Ha knapper: [Rediger] (tilbake til skjema) og [Bekreft] (lagre til Firestore hvis logget inn, ellers vise "logg inn"-varsel).
+- Bruke Tailwind for ren layout og responsive kort.
+- Bruke TypeScript og React best practices.
+- Håndtere at ingen data finnes (viser "Ingen billett funnet" + lenke til opplasting).
+- (Hvis emulator aktiv) logge "Saved to emulator" i konsollen.
+
+#specifics
+- Filvisning: <img> for bilder, <embed> for PDF.
+- Layout: bruk shadcn/ui Card og Button-komponenter.
+- Legg komponent i src/components/TicketPreview.tsx.
+- Oppdater page.tsx slik at forhåndsvisningen vises etter vellykket opplasting.
+- Sørg for god feilhåndtering og validering.
+
+#context
+Frontend-miljø og Firebase-tilkobling er ferdig satt opp (TR-FE-103 fullført).
+Dette er del av Milepæl M2 (Frontend Init) i Tog Refusjon-prosjektet.
+
+#examples
+Ved lokal test: bruk localStorage med mockdata
+{"dato":"2025-11-13","tid":"07:00","tog":"R20","fra":"Oslo S","til":"Lillehammer","fileName":"billett.pdf"}
+
+#notes
+Bruk samme visuelle stil som i TR-FE-103 (Tailwind + shadcn/ui).

@@ -1,0 +1,179 @@
+#role
+Du er senior frontend-utvikler og UI/UX-designer med fokus på moderne, minimalistiske webapper.
+Stack: Next.js + React + TypeScript + Tailwind CSS v4. Du bruker web browsing aktivt for å hente visuell inspirasjon og oversette dette til konkret kode (designsystem + komponenter).
+
+#task
+Etabler og implementer en konsekvent, moderne visuell stil for hele TogRefusjon-appen, inkludert:
+- Landings-/startside
+- Dashboard/oversikt (etter innlogging)
+- Billettliste / “mine billetter”
+- Ticket preview / detaljer
+- Kravs-/wizard-flow
+- Profil / innstillinger / konto-sider
+
+Målet er:
+- Moderne, lettlest, rolig uttrykk
+- Duse farger og god whitespace
+- Tydelige, informative knapper og handlinger
+- En rød tråd i designet på tvers av alle sider
+- Ticket preview skal være fullt synlig uten scroll på typisk laptop-skjerm
+
+#specifics
+
+1) Overordnet visuell referanse (Oslo Bysykkel)
+- Bruk https://oslobysykkel.no/ som primær visuell referanse for:
+  - Fargebruk (lys bakgrunn, klar primærfarge, mye hvitt)
+  - Whitespace (store flater, lite støy)
+  - Typografi (store, tydelige overskrifter, enkel brødtekst)
+  - Enkle, tydelige knapper
+- Viktig: Landingssiden kan ligge veldig nær Oslo Bysykkel-stilen.
+- Men: Den innloggede delen skal oppføre seg mer som et SaaS-dashboard/verktøy, ikke en ren kampanjeside.
+
+2) Research og inspirasjon (bruk nettet aktivt)
+- I tillegg til Oslo Bysykkel, bruk web browsing til å finne 3–5 referanser på:
+  - Moderne dashboards (fintech/produktivitetsapper) med soft/pastell-palett
+  - Transport-/reiseapper (tog/fly/buss) med “boarding pass”/ticket UI
+- Oppsummer kort:
+  - Hvilke farge- og typografi-mønstre du vil kopiere
+  - Hvordan de løser hierarki (hva som “popper” visuelt)
+  - Hvordan de bruker cards, ikoner, badges og spacing
+- Oversett dette eksplisitt til Tailwind-terminologi:
+  - Hvilke `bg-*`, `text-*`, `border-*`, `shadow-*`, `rounded-*`, `space/gap/p-*`-nivåer som skal være “standard” i appen.
+
+3) Definer et lite designsystem for TogRefusjon
+Etabler en enkel, men tydelig designkontrakt:
+
+- Fargepalett:
+  - 1 primærfarge inspirert av Oslo Bysykkel-stilen (rolig blå/teal e.l.), med 3–4 nivåer (f.eks. 100/300/500/700)
+  - 1–2 nøytrale gråskalaer for bakgrunn og tekst (lys bakgrunn, mørk tekst)
+  - Subtile statusfarger for:
+    - Suksess (refusjon kvalifisert/godkjent)
+    - Varsel (mulig refusjon / uavklart)
+    - Feil (avvist / ikke kvalifisert)
+- Typografi:
+  - Definer typografisk skala (f.eks. `text-xs/sm/base/lg/xl/2xl`)
+  - Angi hvilke nivåer brukes til:
+    - Side-titler
+    - Seksjonsoverskrifter
+    - Primærinformasjon (tog, tider, beløp)
+    - Sekundær metadata (referanse, vogn, sete)
+- Spacing:
+  - Standard spacing for:
+    - Side-padding (f.eks. `px-4 md:px-6 lg:px-10`)
+    - Card-padding (f.eks. `p-4 md:p-5`)
+    - Vertikal spacing mellom seksjoner (`space-y-4`/`space-y-6`)
+- Komponent-prinsipper:
+  - Cards: hvit bakgrunn, myk skygge, runde hjørner (f.eks. `rounded-xl shadow-sm`).
+  - Badges/labels: små, med soft bakgrunn og tydelig tekst.
+  - Knapper:
+    - Primary: solid, tydelig, med hover/focus-states
+    - Secondary: outlined eller “ghost” med subtil bakgrunn på hover
+
+Dokumentér dette designsystemet kort i tekst (f.eks. som en intern “design guide” seksjon i svaret) før du oppdaterer kode.
+
+4) Landingsside (før innlogging) – Oslo Bysykkel-inspirert
+- Struktur:
+  - Stor hero-seksjon med:
+    - Tydelig hovedbudskap (f.eks. “Automatisk refusjon når toget er forsinket”)
+    - Kort forklaring i 2–3 linjer
+    - En primærknapp (“Kom i gang” / “Logg inn”)
+  - Seksjon “Slik fungerer det” i 3 enkle steg, lik oppsettet på Oslo Bysykkel.
+- Stil:
+  - Lys bakgrunn, mye hvitt, primærfarge til knapper og lenker.
+  - Enkelt ikon-/illustrasjonsbruk, ingen tunge grafiske elementer.
+- Ikke bruk hele skjermen på illustrasjon – la tekst og handling dominere mer enn på Oslo Bysykkel, siden dette er et verktøy.
+
+5) Hovedlayout / shell (etter innlogging)
+- Felles:
+  - Lys sidebakgrunn (`bg-slate-50`/`100` e.l.)
+  - Konsistent max width for innhold (f.eks. `max-w-5xl mx-auto`)
+  - Felles topptekst med appnavn/logo og bruker-/profiltilgang
+- Navigasjon:
+  - En enkel, tydelig navigasjonsstruktur (topbar eller sidebar)
+  - Aktiv side markeres konsekvent (farge/underline/badge)
+- Visuelt skal dette føles som “Oslo Bysykkel + SaaS-dashboard”:
+  - Samme ro og farger, men med mer fokus på data og cards enn på store hero-bilder.
+
+6) Dashboard / oversikt (etter innlogging)
+- Layout:
+  - Øverst: seksjon for “Neste relevante ting”:
+    - Kommende reiser
+    - Billetter som potensielt gir refusjon
+  - Midten: “Mine billetter” (utvalgt liste) og “Aktive krav”
+  - Evt. nederst: historikk eller informasjon
+- Bruk cards med konsekvent størrelse, spacing og typografi i tråd med designsystemet.
+- Viktigste info (neste avgang, forsinkelse, aktivt krav) skal være lett å se umiddelbart.
+
+7) Billettliste (“Mine billetter”)
+- Liste/grid med ticket cards:
+  - Samme card-stil som definert i designsystemet.
+  - Klart hierarki: strekning, tidspunkt, status, primær handling.
+- Tydelige “empty state” og “loading state” med samme visuelle språk.
+
+8) Kravs-/wizard-flow
+- Gjør flowen rolig og lineær:
+  - Topp: stegindikator (1–2–3) med tydelig status.
+  - Midten: card med spørsmål/innhold.
+  - Bunnen: klare primary/secondary-knapper (“Neste”, “Tilbake”, “Avbryt”).
+- Bruk samme knappe-stil som ellers.
+
+9) Profil / innstillinger
+- Enkle cards for:
+  - Personinfo
+  - Lagret ID/legitimasjon (om relevant)
+  - Varslingsinnstillinger
+- Samme kortstil + tydelige seksjonstitler.
+
+10) Ticket preview – spesialkrav (ingen scroll)
+- Ticket preview skal:
+  - Være tydelig knyttet til resten av designet (samme card-stil, farger, typografi).
+  - Presenteres som et “boarding pass”-kort.
+- Layout-krav:
+  - Hele billetten skal være synlig uten scroll på typisk laptop (1366x768 / 1440x900) i normal zoom.
+  - Løsning:
+    - Begrens høyde via fornuftig `max-h` og mer kompakt vertikal spacing.
+    - Bruk horisontal inndeling (f.eks. `md:flex md:flex-row`) i stedet for unødvendig stacking.
+- Hierarki i kortet:
+  - Først: strekning, dato, tognummer.
+  - Deretter: avgang/ankomst, forsinkelse, refusjonsstatus.
+  - Til slutt: metadata (vogn, sete, referanse) og knapper.
+
+11) Tilgjengelighet og states
+- Sørg for:
+  - AA-kontrast på tekst/bakgrunn.
+  - Klare focus-states på lenker/knapper (`focus-visible:ring-*`).
+  - Ikke formidle kritisk informasjon kun med farge (bruk ikon/label også).
+- Definer og implementer visuelle states for:
+  - Loading
+  - Empty
+  - Error
+  - Success/confirmation
+
+12) Implementasjon
+- Ikke endre business-logikk eller API-er unødvendig.
+- Fokuser på:
+  - JSX-struktur for bedre semantikk
+  - Tailwind-klasser for å følge designsystemet
+  - Gjenbrukbare komponenter der det er naturlig (f.eks. `Button`, `Card`, `Badge`, `PageHeader`).
+- Gi til slutt en kort oppsummering:
+  - Hvilke designreferanser du brukte fra nettet (inkludert Oslo Bysykkel)
+  - Hvordan designsystemet ble definert
+  - Hvilke sider/komponenter du faktisk oppdaterte
+  - Eventuelle ting som bør kvalitetssikres manuelt (edge screen sizes, lange tekster, mange billetter, osv.)
+
+#context
+- Prosjekt: TogRefusjon – webapp for automatisk håndtering av tog-billetter og refusjon.
+- Stack: Next.js, React, TypeScript, Tailwind CSS v4.
+- Det finnes allerede flere sider/komponenter, men de er visuelt ujevne og mangler en rød tråd.
+
+#examples
+- Bruk inspirasjon fra:
+  - https://oslobysykkel.no/ (primær referanse for ro, farger, typografi, whitespace)
+  - Moderne “pastel dashboard UI” (fintech/produktivitetsapper)
+  - Boarding pass-/ticket-komponenter brukt i fly-/reiseapper
+  - Enkle, rene SaaS-apper med mye whitespace og tydelig typografi
+
+#notes
+- Ikke innfør nye design-/komponent-bibliotek uten god grunn.
+- Ikke gå for “visual overload” – prioriter rolig, lettlest, praktisk UI.
+- Hovedmål: én konsistent visuell linje på tvers av hele appen, med ticket preview som en tydelig, men integrert del.

@@ -1,0 +1,85 @@
+[NOFILE] Svar kun i tekst. Ikke opprett eller endre filer automatisk — returner komplette filer (med paths), nøyaktige Terminal-kommandoer og teststeg jeg skal kjøre manuelt.
+
+#task
+TR-SET-002/TR-AU-201/TR-DB-202/TR-SEC-203: Sett opp Firebase for prosjektet "togrefusjon" (Next.js + Firebase) i repoet mitt.
+Lever:
+1) Filer (fullt innhold + paths) for: firebase.json, .firebaserc, firestore.rules, firestore.indexes.json, storage.rules, functions/src/index.ts, functions/package.json, functions/tsconfig.json, frontend/src/lib/firebase.ts, frontend/.env.local.example.
+2) Terminal-kommandoer (rekkefølge) for init, install, build, emulator start og verifikasjon.
+3) Klare steg som sier hvor handlingen skal gjøres (Terminal vs. Editor).
+4) Akseptkriterier og [SJEKKLISTE] på slutten.
+
+#specifics
+- Region: europe-west1 for Firestore/Functions. Storage: EU/europe-west1.
+- Auth: Email/Password aktivert (BankID kommer senere).
+- Firestore-regler: bruker kan bare lese/endre egne data; audit kun via backend; default deny ellers.
+- Indekser: claims på (userId, status, updatedAt desc) — som start.
+- Functions: Node 20, TypeScript, eslint på. En enkel https ping-funksjon i europe-west1.
+- Emulator Suite: Firestore, Auth, Storage, Functions. Klare porter eller default, det som er mest stabilt.
+- Environment vars i frontend: NEXT_PUBLIC_FIREBASE_* (gi en .env.local.example).
+- Kode skal være deterministisk og prod-klar (ingen pseudo).
+
+#context
+- Repo-struktur: 
+  - frontend/ (Next.js app)
+  - functions/ (Firebase Cloud Functions)
+  - docs/, prompts/ finnes.
+- Firebase-prosjektet er allerede opprettet i konsollen med navn "togrefusjon". Vi kobler CLI mot dette prosjektet.
+- Målet: få lokal utvikling i gang med emulator + minimal sikker og riktig konfig.
+- Jeg kjører Windows/PowerShell i Cursor-terminal, men kommandoer skal være generiske (npm/firbase-tools).
+
+#examples
+- Fil: firestore.rules med users/tickets/legs/claims scoped til owner (request.auth.uid), og audit write=deny (kun via CF).
+- Fil: functions/src/index.ts med region("europe-west1") og /ping som returnerer {ok:true, ts}.
+- Kommando: firebase init (valg Firestore/Functions/Storage/Emulators) → deretter npm i / build i functions, npm i firebase i frontend.
+
+#notes
+- Ikke referér til dokumenter jeg skal “lese”; gi ferdige filer og kommandoer i riktig rekkefølge.
+- Skill tydelig mellom Terminal og Editor-steg. Nummerér.
+- Anta at jeg ikke har gjort noe inni repoet ennå (gi komplette filer).
+- Ikke bruk placeholder-tekst som “fill this in later” — gi reelle defaults og TODO-kommentarer kun der det er nødvendig (f.eks. .env).
+- Til slutt: Oppsummer akseptkriterier + [SJEKKLISTE].
+
+# Leveranser (forventet struktur på svaret ditt)
+## Hva
+Kort hva som settes opp (1–2 linjer).
+
+## Hvordan
+Gi nummererte steg, og for hvert steg:
+- **Terminal:** eksakte kommandoer (kopi–lim).
+- **Editor:** fullstendig filinnhold (med path fra repo-rot).
+
+Steg-mal (bruk denne rekkefølgen):
+1) **Terminal:** Installer firebase-tools, login, og init mot prosjekt-id `togrefusjon`.
+2) **Editor:** `.firebaserc` (fullt innhold) peker til prosjekt-id.
+3) **Editor:** `firebase.json` (fullt innhold) med hosting=NEI (utgår), men Firestore/Storage/Emulators/Functions riktig konfigurert.
+4) **Editor:** `firestore.rules` (fullt innhold).
+5) **Editor:** `firestore.indexes.json` (fullt innhold).
+6) **Editor:** `storage.rules` (fullt innhold).
+7) **Terminal:** Opprett Functions (Node 20, TS), `npm i`, `npm run build`.
+8) **Editor:** `functions/src/index.ts` (fullt innhold).
+9) **Editor:** `functions/package.json`, `functions/tsconfig.json` (fulle).
+10) **Terminal:** Installer Firebase SDK i frontend: `cd frontend && npm i firebase`.
+11) **Editor:** `frontend/src/lib/firebase.ts` (fullt innhold).
+12) **Editor:** `frontend/.env.local.example` (fullt innhold).
+13) **Terminal:** Start emulator suite og Next.js dev-server.
+14) **Tester:** 3–5 teststeg for å verifisere auth-regler, index, ping-funksjon.
+
+## Hvorfor
+1–3 korte punkter om regionvalg, sikkerhetsregler og emulatorfordeler.
+
+## Akseptkriterier
+- `firebase emulators:start` kjører uten feil (Firestore/Auth/Storage/Functions).
+- `npm run dev` i frontend kjører, og `frontend/src/lib/firebase.ts` initialiserer uten runtime-feil.
+- Auth Email/Password fungerer lokalt (sign-in/sign-out flows i kode kan komme senere).
+- Ping-funksjon svarer `{ok:true}` via emulator.
+- Firestore-regler håndhever at en bruker kun kan lese/endre egne dokumenter.
+- Index for `claims` er definert (eller prompt om opprettelse i emulator-logg).
+
+[SJEKKLISTE]
+- Kravdekket? Ja/Nei (hva mangler?)
+- Antakelser eksplisitte?
+- Testbarhet (unit + integrasjon)?
+- Idempotens og feilhåndtering?
+- Skalerbarhet og kost?
+- Sikkerhet/Personvern?
+- Observability (metrics, logs, traces)?

@@ -1,0 +1,53 @@
+rules_version = '2';
+
+  service firebase.storage {
+    match /b/{bucket}/o {
+      // Helper functions
+      function isAuthenticated() {
+        return request.auth != null;
+      }
+
+      function isOwner(userId) {
+        return isAuthenticated() && request.auth.uid == userId;
+      }
+
+      // User ticket uploads
+      // Path: users/{userId}/tickets/{ticketId}/{fileName}
+      match /users/{userId}/tickets/{ticketId}/{fileName} {
+        // Users can upload their own tickets
+        allow create: if isOwner(userId)
+          && request.resource.size < 10 * 1024 * 1024 // Max 10 MB
+          && request.resource.contentType.matches('image/(png|jpeg|jpg)|application/pdf');
+
+        // Users can read their own tickets
+        allow read: if isOwner(userId);
+
+        // Users can update their own tickets (for editing)
+        allow update: if isOwner(userId)
+          && request.resource.size < 10 * 1024 * 1024;
+
+        // Users can delete their own tickets
+        allow delete: if isOwner(userId);
+      }
+
+      // User-specific encrypted PII storage
+      // Path: pii/{userId}/{docType}/{hash}.enc
+      match /pii/{userId}/{docType}/{fileName} {
+        // Users can only upload their own PII
+        allow create: if isOwner(userId)
+          && docType in ['tickets', 'idDocuments']
+          && request.resource.size < 10 * 1024 * 1024; // Max 10 MB
+
+        // Users can read their own PII
+        allow read: if isOwner(userId);
+
+        // Delete only via Cloud Functions (retention policy)
+        allow delete: if false;
+      }
+
+      // Default deny all other paths
+      match /{allPaths=**} {
+        allow read, write: if false;
+      }
+    }
+  }

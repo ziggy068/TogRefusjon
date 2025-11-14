@@ -1,0 +1,72 @@
+#role
+Du er en erfaren fullstack-utvikler og Next.js-ekspert. Du jobber i et eksisterende prosjekt og skal KUN:
+- Rydde opp i lockfiles/monorepo-rot slik at Next.js ikke lenger gir advarsel om feil workspace root
+- Oppdatere Next-konfig om nødvendig
+- Ikke endre annen funksjonalitet eller design
+
+#task
+Fiks Next.js-warningen:
+"⚠ Warning: Next.js inferred your workspace root, but it may not be correct.
+We detected multiple lockfiles and selected the directory of D:\TogRefusjon\package-lock.json as the root directory."
+
+Prosjektet ligger i:
+D:\TogRefusjon
+
+#specifics
+1. Anta at hoved-prosjekt-root skal være mappen der Next-appen ligger (D:\TogRefusjon).
+2. Vi skal bruke npm som pakkeverktøy (dvs. package-lock.json som fasit).
+3. Målet er:
+   - Bare én relevant lockfile for dette prosjektet (package-lock.json i prosjekt-root).
+   - Ingen blanding av npm/yarn/pnpm for dette prosjektet.
+   - Next.js skal ha tydelig definert root slik at warningen forsvinner.
+
+#context
+Dette er situasjonen:
+- Next.js kjører, men gir warning om at den har "inferred" workspace root pga flere lockfiler.
+- Det finnes minst én package-lock.json i D:\TogRefusjon.
+- Det kan ligge andre lockfiler i over- eller undermapper (package-lock.json, yarn.lock, pnpm-lock.yaml).
+
+Du kan:
+- Liste og analysere lockfiler i repoet (forklar hvilke du mener skal beholdes/slettes/flyttes).
+- Foreslå konkrete filendringer i prosjektet (spesielt next.config.*).
+- Gi nødvendige shell-kommandoer som jeg kan kjøre manuelt i terminal.
+
+#steps
+Gjør dette, og vis alt strukturert og tydelig:
+
+1) Kartlegg lockfiler
+- Inspiser prosjektstrukturen og finn alle:
+  - package-lock.json
+  - yarn.lock
+  - pnpm-lock.yaml
+- Klassifiser dem:
+  - Hvilke tilhører hoved-Next-prosjektet i D:\TogRefusjon
+  - Hvilke ser ut til å være gamle/irrelevante
+  - Hvilke kan være egne, selvstendige prosjekter (som bør få være i fred)
+
+2) Ryddestrategi
+- Foreslå en konkret plan:
+  - Hvilke lockfiler skal beholdes som en del av hovedprosjektet (trolig bare D:\TogRefusjon\package-lock.json).
+  - Hvilke lockfiler bør slettes/midlertidig flyttes for å unngå at Next.js blir forvirret.
+- Skriv EKSPISITT:
+  - "Behold:" + full sti
+  - "Slett/flytt om ikke egen app:" + full sti
+- Gi ferdige terminal-kommandoer (Windows, f.eks. PowerShell eller cmd) for å slette de irrelevante lockfilene, men kun som forslag – jeg utfører dem selv.
+
+3) Standardiser på npm
+- Sjekk package.json i prosjekt-root:
+  - Bekreft at det er satt opp for npm.
+- Kontroller at det ikke ligger yarn.lock eller pnpm-lock.yaml i samme mappe.
+- Hvis du finner blanding, forklar kort hvorfor det er problematisk og hva jeg skal gjøre (konkrete steg).
+
+4) Oppdater Next-konfig (workspace root)
+- Finn next.config.js eller next.config.ts i prosjektet.
+- Legg inn riktig config for å låse root til prosjekt-mappen. F.eks.:
+
+  ```js
+  /** @type {import('next').NextConfig} */
+  const nextConfig = {
+    outputFileTracingRoot: __dirname,
+  }
+
+  module.exports = nextConfig

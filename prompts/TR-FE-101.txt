@@ -1,0 +1,180 @@
+[#role
+Du er senior frontend-arkitekt. Returner KUN det som ber om handling: terminal-kommandoer (prefiks "Terminal:") og filinnhold/patcher (prefiks "Editor: <sti>"). Ingen forklaringer, ingen småprat.
+
+#task
+Initialiser prosjektet "tog-refusjon" som Next.js 14 app med TypeScript, Tailwind CSS og PWA-manifest (App Router). Klargjør for videre utvikling.
+
+#specifics
+1) Struktur
+- Rotmappe: tog-refusjon
+- Next.js App Router med /app
+- TypeScript aktivert
+- ESLint + Prettier (konfigurer Prettier + ESLint compat)
+- Tailwind CSS
+- PWA-manifest via app/manifest.ts og ikoner i /public
+
+2) Terminal (kjøres i forelder-katalogen der prosjektet skal ligge)
+- Bruk npm (ikke yarn/pnpm)
+- Opprett app med create-next-app
+- Installer Prettier og relaterte pakker
+
+3) Editor (nøyaktige filer)
+- .prettierrc, .prettierignore
+- Oppdatert .eslintrc.* for Prettier-integrasjon
+- tailwind.config.ts og postcss.config.js (tilpasset)
+- globals.css med @tailwind base, components, utilities
+- app/layout.tsx med metadata og link til manifest
+- app/page.tsx enkel landing
+- app/manifest.ts (MetadataRoute.Manifest) med navn, start_url, theme_color, icons
+- public/ikonfiler: minst maskable- og favicon-plassholdere
+- next.config.mjs med stram basic-config (strict mode)
+
+4) Akseptansekriterier
+- `npm run dev` starter uten feil
+- Lighthouse PWA-baseline: manifest oppdaget, tema-farge, ikoner
+- Tailwind-klasser fungerer på / (synlig UI)
+- ESLint/Prettier kjører lokalt (`npm run lint` og `npm run format`)
+
+#context
+Prosjekt: Tog Refusjon (webapp). Krav: rask boot, lav kompleksitet, ingen service worker nå (kun manifest + ikoner). Forenkle, men legg til rette for senere utvidelser.
+
+#examples
+--- TERMINAL DEL ---
+Terminal:
+npx create-next-app@latest tog-refusjon --typescript --eslint --tailwind --app --src-dir
+cd tog-refusjon
+npm i -D prettier eslint-config-prettier eslint-plugin-prettier
+npm pkg set scripts.format="prettier --write ."
+npm pkg set scripts.lint="next lint"
+npm pkg set scripts.dev="next dev"
+npm pkg set scripts.build="next build"
+npm pkg set scripts.start="next start"
+
+--- EDITOR DELER (nøyaktig innhold) ---
+Editor: .prettierrc
+{
+  "printWidth": 100,
+  "singleQuote": true,
+  "trailingComma": "all",
+  "semi": true,
+  "tabWidth": 2
+}
+
+Editor: .prettierignore
+.next
+node_modules
+dist
+build
+out
+
+Editor: .eslintrc.json
+{
+  "extends": ["next/core-web-vitals", "plugin:prettier/recommended"]
+}
+
+Editor: tailwind.config.ts
+import type { Config } from 'tailwindcss';
+
+const config: Config = {
+  content: ['./src/app/**/*.{ts,tsx}', './src/components/**/*.{ts,tsx}'],
+  theme: { extend: {} },
+  plugins: [],
+};
+export default config;
+
+Editor: postcss.config.js
+module.exports = {
+  plugins: { tailwindcss: {}, autoprefixer: {} },
+};
+
+Editor: src/app/globals.css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: light dark; }
+body { min-height: 100vh; }
+
+Editor: src/app/layout.tsx
+import type { Metadata } from 'next';
+import './globals.css';
+
+export const metadata: Metadata = {
+  title: 'Tog Refusjon',
+  description: 'Automatisert refusjon for togreiser',
+  applicationName: 'Tog Refusjon',
+  themeColor: '#0ea5e9',
+  manifest: '/manifest.webmanifest'
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="no">
+      <body>{children}</body>
+    </html>
+  );
+}
+
+Editor: src/app/page.tsx
+export default function Page() {
+  return (
+    <main className="min-h-screen grid place-items-center p-8">
+      <div className="max-w-xl text-center space-y-4">
+        <h1 className="text-3xl font-bold">Tog Refusjon</h1>
+        <p className="text-base opacity-80">
+          Next.js + TypeScript + Tailwind er klart. Manifest er koblet til.
+        </p>
+        <a
+          href="/manifest.webmanifest"
+          className="inline-block border px-4 py-2 rounded hover:opacity-80"
+        >
+          Se manifest
+        </a>
+      </div>
+    </main>
+  );
+}
+
+Editor: src/app/manifest.ts
+import type { MetadataRoute } from 'next';
+
+export default function manifest(): MetadataRoute.Manifest {
+  return {
+    name: 'Tog Refusjon',
+    short_name: 'TogRef',
+    description: 'Automatisert refusjon for togreiser',
+    start_url: '/',
+    display: 'standalone',
+    background_color: '#ffffff',
+    theme_color: '#0ea5e9',
+    icons: [
+      { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+      { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+      { src: '/icons/maskable-192.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
+      { src: '/icons/maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+    ]
+  };
+}
+
+Editor: public/icons/README.txt
+Plassholdere for app-ikoner. Erstatt med genererte ikoner før produksjon.
+
+Editor: next.config.mjs
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  reactStrictMode: true
+};
+export default nextConfig;
+
+--- SJEKK ---
+Terminal:
+npm run format
+npm run lint
+npm run dev
+#notes
+- Ikke bruk service worker nå. Kun manifest og ikoner for PWA-baseline.
+- Anta Next.js 14 og App Router med /app og /src.
+- Bruk norsk språk i filer der det gir mening (metadata).
+- Levere KUN “Terminal:” og “Editor:”-blokker som over. Ingen ekstra tekst.
+
+

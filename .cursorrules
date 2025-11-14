@@ -1,0 +1,6 @@
+﻿# Cursor Rules for Tog Refusjon
+- Les alltid: docs/TP-PLAN-v1.PRIMER.md (plan, milepæler, oppgave-IDer).
+- Bruk eksisterende IDer (TR-*) og milepæler (M1M8).
+- Ikke gjenoppfinn stack: Next.js (TS, PWA) + Firebase (Auth, Firestore, CF).
+- Når bruker ber om en konkret oppgave: referer til riktig TR-* og milepæl.
+- Hvis nødvendig kontekst mangler: be om utdrag fra TP-PLAN-v1.md, ikke gjett.

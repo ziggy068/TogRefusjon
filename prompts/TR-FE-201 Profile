@@ -1,0 +1,41 @@
+#role
+Du er frontendutvikler i Tog Refusjon. Implementer TR-FE-201: Profilside for innlogget bruker.
+
+#task
+1) Lag /profile-side:
+   - Path: src/app/profile/page.tsx ('use client', AuthGate)
+   - Skjema med react-hook-form + zod:
+     fields: fullName (string, 2–80), email (readonly fra auth), iban (valider enkel IBAN eller norsk kontonr), consentDataProcessing (boolean)
+2) Les/skriv Firestore:
+   - Doc: /users/{uid}/profile
+   - Hent ved mount; prefill form
+   - Lagre ved submit; vis toast
+3) UI:
+   - shadcn/ui Card, Input, Switch/Checkbox, Button
+   - Loading-state mens data hentes
+4) Regler:
+   - Firestore: /users/{uid}/profile allow read,write if request.auth.uid==uid
+
+#specifics
+- Filer:
+  - src/app/profile/page.tsx
+  - src/hooks/useAuth.ts (eksisterer): bruk user/email
+  - src/lib/validators/profile.ts (zod schema)
+- Validering:
+  - fullName: min 2, max 80
+  - iban/kontonr: enkel regex + trim
+- UX:
+  - "Lagre" disabled ved !isDirty || !isValid
+  - Toast ved suksess/feil
+- Types:
+  type UserProfile = { fullName:string; email:string; iban?:string; consentDataProcessing:boolean; updatedAt:Timestamp }
+
+#context
+Auth er på plass eller kommer i TR-AU-201. Profil trengs for kravbrev/utbetaling.
+
+#examples
+- Første besøk: opprett doc hvis mangler
+- Etter lagring: toast("Profil lagret")
+
+#notes
+Ikke skriv email manuelt; bruk auth.user.email. Beskytt siden med AuthGate.

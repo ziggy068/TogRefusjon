@@ -1,0 +1,225 @@
+#role
+Du er senior frontend-arkitekt. Returner KUN det som ber om handling: terminal-kommandoer (prefiks "Terminal:") og filinnhold/patcher (prefiks "Editor: <sti>"). Ingen forklaringer.
+
+#task
+Etabler UI-baseline i Next.js-prosjektet fra TR-FE-101: installer og konfigurer shadcn/ui, legg inn global layout (header/nav/footer), grunnleggende sider (404, loading), og enkle UI-komponenter. Klargjør for videre funksjonsutvikling.
+
+#specifics
+1) Pakker/rammeverk
+- shadcn/ui (Radix-basert), lucide-react
+- tailwindcss-animate
+- clsx, tailwind-merge
+
+2) Layout/struktur
+- src/components/ui/* fra shadcn
+- src/components/site/Header.tsx, Footer.tsx, Nav.tsx
+- Global header med logo/brand “Tog Refusjon” og nav-lenker: “Hjem”, “Saker”, “Last opp billett”, “Profil”
+- Footer med enkel tekst og lenke til /personvern (placeholder)
+- Responsiv container (max-w-screen-lg, padding)
+- Tema: light/dark auto (pref via prefers-color-scheme)
+
+3) Sider/tilstander
+- src/app/not-found.tsx (404)
+- src/app/loading.tsx (global loading)
+- Oppdater src/app/layout.tsx til å bruke Header/Footer og semantisk <main>
+- Oppdater src/app/page.tsx til å bruke shadcn Card/Button og demo-seksjon
+
+4) Tailwind
+- Oppdater tailwind.config.ts: legg til tailwindcss-animate plugin
+- Oppdater globals.css med enkle CSS-variabler for tema (valgfritt, men hold det minimalt)
+
+5) Ikoner/komponenter
+- Installer lucide-react og bruk et enkelt ikon i header
+- Legg til shadcn-komponenter: button, card, input, textarea, separator, skeleton, toast (sonner for senere bruk)
+
+6) Akseptansekriterier
+- `npm run dev` uten feil
+- Header/Footer synlig på alle sider
+- 404 vises for ukjent rute
+- Loading-komponent renderes ved lazy content (simuler med timeout i page)
+- shadcn/ui komponenter fungerer og bygger uten typerrors
+
+#context
+Prosjekt: Tog Refusjon (webapp). Next.js 14 + TS + Tailwind + manifest etablert i TR-FE-101. Vi legger kun grunnmur for UI. Ingen SW. Norsk språk i synlig tekst.
+
+#examples
+--- TERMINAL ---
+Terminal:
+cd tog-refusjon
+npm i lucide-react clsx tailwind-merge
+npm i -D tailwindcss-animate
+npx shadcn@latest init -d
+npx shadcn@latest add button card input textarea separator skeleton toast
+
+--- EDITOR (patcher/nøyaktig innhold) ---
+Editor: tailwind.config.ts
+import type { Config } from 'tailwindcss';
+
+const config: Config = {
+  content: ['./src/app/**/*.{ts,tsx}', './src/components/**/*.{ts,tsx}'],
+  theme: { extend: {} },
+  plugins: [require('tailwindcss-animate')],
+};
+export default config;
+
+Editor: src/components/site/Nav.tsx
+'use client';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { cn } from '@/lib/utils';
+
+const items = [
+  { href: '/', label: 'Hjem' },
+  { href: '/saker', label: 'Saker' },
+  { href: '/last-opp', label: 'Last opp billett' },
+  { href: '/profil', label: 'Profil' },
+];
+
+export default function Nav() {
+  const pathname = usePathname();
+  return (
+    <nav className="flex gap-4">
+      {items.map((i) => (
+        <Link
+          key={i.href}
+          href={i.href}
+          className={cn(
+            'text-sm hover:underline',
+            pathname === i.href ? 'font-semibold' : 'opacity-80'
+          )}
+        >
+          {i.label}
+        </Link>
+      ))}
+    </nav>
+  );
+}
+
+Editor: src/components/site/Header.tsx
+import Link from 'next/link';
+import Nav from './Nav';
+import { Train } from 'lucide-react';
+
+export default function Header() {
+  return (
+    <header className="border-b">
+      <div className="mx-auto max-w-screen-lg px-4 h-14 flex items-center justify-between">
+        <Link href="/" className="flex items-center gap-2">
+          <Train className="h-5 w-5" />
+          <span className="font-semibold">Tog Refusjon</span>
+        </Link>
+        <Nav />
+      </div>
+    </header>
+  );
+}
+
+Editor: src/components/site/Footer.tsx
+export default function Footer() {
+  return (
+    <footer className="border-t">
+      <div className="mx-auto max-w-screen-lg px-4 py-6 text-sm opacity-80">
+        © {new Date().getFullYear()} Tog Refusjon · <a href="/personvern" className="underline">Personvern</a>
+      </div>
+    </footer>
+  );
+}
+
+Editor: src/lib/utils.ts
+import { type ClassValue } from 'clsx';
+import clsx from 'clsx';
+import { twMerge } from 'tailwind-merge';
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+
+Editor: src/app/layout.tsx
+import type { Metadata } from 'next';
+import './globals.css';
+import Header from '@/components/site/Header';
+import Footer from '@/components/site/Footer';
+
+export const metadata: Metadata = {
+  title: 'Tog Refusjon',
+  description: 'Automatisert refusjon for togreiser',
+  applicationName: 'Tog Refusjon',
+  themeColor: '#0ea5e9',
+  manifest: '/manifest.webmanifest'
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="no">
+      <body className="min-h-screen flex flex-col">
+        <Header />
+        <main className="flex-1 mx-auto max-w-screen-lg w-full px-4 py-6">
+          {children}
+        </main>
+        <Footer />
+      </body>
+    </html>
+  );
+}
+
+Editor: src/app/loading.tsx
+export default function Loading() {
+  return (
+    <div className="grid place-items-center py-24">
+      <div className="animate-pulse text-sm opacity-80">Laster inn…</div>
+    </div>
+  );
+}
+
+Editor: src/app/not-found.tsx
+export default function NotFound() {
+  return (
+    <div className="grid place-items-center py-24 text-center space-y-2">
+      <h1 className="text-2xl font-semibold">Fant ikke siden</h1>
+      <p className="opacity-80">Siden du leter etter finnes ikke.</p>
+    </div>
+  );
+}
+
+Editor: src/app/page.tsx
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+
+export default function Page() {
+  return (
+    <section className="space-y-6">
+      <h1 className="text-3xl font-bold">Tog Refusjon</h1>
+      <Card>
+        <CardContent className="p-6 space-y-4">
+          <p className="opacity-80">
+            UI-baseline med shadcn/ui er klart. Dette er en enkel start.
+          </p>
+          <Button>Primær handling</Button>
+        </CardContent>
+      </Card>
+    </section>
+  );
+}
+
+Editor: src/app/(plassholdere)/saker/page.tsx
+export default function SakerPage() {
+  return <div className="opacity-80">Liste over saker kommer her.</div>;
+}
+
+Editor: src/app/(plassholdere)/last-opp/page.tsx
+export default function LastOppPage() {
+  return <div className="opacity-80">Last opp billett – placeholder.</div>;
+}
+
+Editor: src/app/(plassholdere)/profil/page.tsx
+export default function ProfilPage() {
+  return <div className="opacity-80">Profil – placeholder.</div>;
+}
+
+--- SJEKK ---
+Terminal:
+npm run dev
+
+#notes
+- Bruk eksisterende Tailwind-oppsett fra TR-FE-101. Ikke endre Prettier/ESLint.
+- Hold tekst på norsk. Ingen service worker.
+- Lever KUN “Terminal:” og “Editor:”-blokker.

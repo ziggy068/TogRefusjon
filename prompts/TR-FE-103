@@ -1,0 +1,284 @@
+#role
+Du er senior frontend-arkitekt. Returner KUN det som ber om handling: terminal-kommandoer (prefiks "Terminal:") og filinnhold/patcher (prefiks "Editor: <sti>"). Ingen forklaringer.
+
+#task
+Implementer funksjonell UI for “Last opp billett” i Next.js-appen: skjema med validering (zod + react-hook-form), filopplasting (PNG/JPG/PDF), enkel forhåndsvisning, og lokal lagring (localStorage) som midlertidig stub. Ikke backend-opplasting ennå.
+
+#specifics
+- Pakker: react-hook-form, zod, @hookform/resolvers, date-fns
+- shadcn/ui: form, label (bruk eksisterende button, input, textarea, toast)
+- Felter (obligatorisk): dato, klokkeslett, tognummer, fra-stasjon, til-stasjon, billettfil (PNG/JPG/PDF, ≤ 10 MB)
+- Forhåndsvisning: vis filnavn/størrelse; vis bilde-preview for PNG/JPG; for PDF, vis ikon/lenke
+- Ved submit: valider, lagre “sak” i localStorage (id, metadata, fil-mime, dataURL), vis toast “Billett lagret lokalt”
+- Navigasjon: behold siden på /last-opp
+- Tilgjengelighet: Label kobles til input; aria-attributter på feil
+- Ingen service worker, ingen opplasting til server
+
+#context
+Prosjekt: Tog Refusjon. TR-FE-101 og TR-FE-102 er på plass. Dette er kun frontend-stub for videre integrasjon mot backend/opplasting senere.
+
+#examples
+--- TERMINAL ---
+Terminal:
+cd tog-refusjon
+npm i react-hook-form zod @hookform/resolvers date-fns
+npx shadcn@latest add form label
+
+--- EDITOR ---
+Editor: src/lib/file.ts
+export async function fileToDataURL(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+Editor: src/app/(plassholdere)/last-opp/page.tsx
+// erstatt placeholder med ekte side
+import UploadTicketForm from '@/components/feature/UploadTicketForm';
+
+export default function LastOppPage() {
+  return (
+    <section className="space-y-6">
+      <h1 className="text-2xl font-semibold">Last opp billett</h1>
+      <UploadTicketForm />
+    </section>
+  );
+}
+
+Editor: src/components/feature/UploadTicketForm.tsx
+'use client';
+
+import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { format } from 'date-fns';
+import { fileToDataURL } from '@/lib/file';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
+} from '@/components/ui/form';
+import { toast } from '@/components/ui/use-toast';
+
+const MAX_BYTES = 10 * 1024 * 1024;
+const accepted = ['image/png', 'image/jpeg', 'application/pdf'];
+
+const Schema = z.object({
+  dato: z.string().min(1, 'Dato er påkrevd'),
+  klokkeslett: z.string().min(1, 'Klokkeslett er påkrevd'),
+  tognummer: z.string().min(1, 'Tognummer er påkrevd'),
+  fra: z.string().min(1, 'Fra-stasjon er påkrevd'),
+  til: z.string().min(1, 'Til-stasjon er påkrevd'),
+  beskrivelse: z.string().optional(),
+  fil: z
+    .custom<FileList>((v) => v instanceof FileList && v.length > 0, 'Fil er påkrevd')
+    .refine((fl) => fl && fl[0] && accepted.includes(fl[0].type), 'Kun PNG/JPG/PDF tillatt')
+    .refine((fl) => fl && fl[0] && fl[0].size <= MAX_BYTES, 'Maks 10 MB'),
+});
+
+type FormValues = z.infer<typeof Schema>;
+
+export default function UploadTicketForm() {
+  const [preview, setPreview] = useState<{ name: string; size: number; type: string; dataURL?: string }>();
+  const form = useForm<FormValues>({ resolver: zodResolver(Schema), defaultValues: { beskrivelse: '' } });
+
+  async function onSubmit(values: FormValues) {
+    const f = values.fil[0];
+    const dataURL = await fileToDataURL(f);
+
+    const sak = {
+      id: crypto.randomUUID(),
+      opprettet: new Date().toISOString(),
+      dato: values.dato,
+      klokkeslett: values.klokkeslett,
+      tognummer: values.tognummer,
+      fra: values.fra,
+      til: values.til,
+      beskrivelse: values.beskrivelse ?? '',
+      fil: { name: f.name, type: f.type, size: f.size, dataURL },
+    };
+
+    const key = 'tr_saker';
+    const existing = JSON.parse(localStorage.getItem(key) || '[]');
+    existing.unshift(sak);
+    localStorage.setItem(key, JSON.stringify(existing));
+
+    toast({ title: 'Billett lagret lokalt', description: 'Saken er klar for videre behandling.' });
+    form.reset();
+    setPreview(undefined);
+  }
+
+  function onFileChange(fl?: FileList | null) {
+    if (!fl || fl.length === 0) return setPreview(undefined);
+    const f = fl[0];
+    setPreview({ name: f.name, size: f.size, type: f.type });
+  }
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <FormField
+            control={form.control}
+            name="dato"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Dato</FormLabel>
+                <FormControl>
+                  <Input type="date" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="klokkeslett"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Klokkeslett</FormLabel>
+                <FormControl>
+                  <Input type="time" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="tognummer"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Tognummer</FormLabel>
+                <FormControl>
+                  <Input placeholder="f.eks. 71" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="fra"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Fra</FormLabel>
+                <FormControl>
+                  <Input placeholder="Stasjon" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="til"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Til</FormLabel>
+                <FormControl>
+                  <Input placeholder="Stasjon" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <FormField
+          control={form.control}
+          name="beskrivelse"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Beskrivelse (valgfritt)</FormLabel>
+              <FormControl>
+                <Textarea placeholder="Tilleggsinfo (sete, bestilling osv.)" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="fil"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Billett (PNG, JPG eller PDF)</FormLabel>
+              <FormControl>
+                <Input
+                  type="file"
+                  accept=".png,.jpg,.jpeg,application/pdf"
+                  onChange={(e) => {
+                    field.onChange(e.target.files);
+                    onFileChange(e.target.files);
+                  }}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {preview && (
+          <div className="text-sm rounded border p-3">
+            <div className="font-medium">Forhåndsvisning</div>
+            <div className="opacity-80">
+              {preview.name} · {(preview.size / 1024).toFixed(1)} kB · {preview.type}
+            </div>
+            {preview.type.startsWith('image/') && (
+              // bilde vises først etter submit i real bruk; her viser vi ikke dataURL før submit
+              <div className="mt-2 text-xs opacity-70">
+                Bilde vil vises etter lagring (lokal stub).
+              </div>
+            )}
+            {preview.type === 'application/pdf' && (
+              <div className="mt-2 text-xs opacity-70">PDF kan åpnes fra saken etter lagring.</div>
+            )}
+          </div>
+        )}
+
+        <div className="flex gap-3">
+          <Button type="submit">Lagre lokalt</Button>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => {
+              form.reset();
+              setPreview(undefined);
+            }}
+          >
+            Nullstill
+          </Button>
+        </div>
+
+        <p className="text-xs opacity-70">
+          Etter innsendelse lagres saken kun i din nettleser (localStorage). Ingen opplasting skjer nå.
+        </p>
+      </form>
+    </Form>
+  );
+}
+
+Editor: src/components/ui/use-toast.ts
+// minimal toast hook (hvis ikke allerede generert av shadcn toast)
+// Placeholder for å kunne kalle toast(). Bytt ut med shadcn toast system ved senere steg.
+export function toast({ title, description }: { title: string; description?: string }) {
+  // eslint-disable-next-line no-alert
+  alert(`${title}${description ? `\n${description}` : ''}`);
+}
+
+--- SJEKK ---
+Terminal:
+npm run dev
+
+#notes
+- Ikke implementer backend; kun lokal stub via localStorage.
+- Streng validering: filtype og størrelse.
+- Norsk språk i labels/feilmeldinger.
+- Lever KUN “Terminal:” og “Editor:”-blokker.

@@ -1,0 +1,60 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // User profiles
+    match /users/{userId} {
+      // Users can read and write their own profile
+      allow read, write: if isOwner(userId);
+    }
+
+    // User tickets (subcollection under users)
+    match /users/{userId}/tickets/{ticketId} {
+      // Users can read and write their own tickets
+      allow read, write: if isOwner(userId);
+    }
+
+    // Legacy tickets collection (global) - DEPRECATED, use users/{userId}/tickets instead
+    match /tickets/{ticketId} {
+      // Users can only read/write tickets they created
+      allow read, write: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+    }
+
+    // Legs collection: users can only read/write their own legs
+    match /legs/{legId} {
+      allow read, write: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+    }
+
+    // Claims (future implementation) - can be global or subcollection
+    match /users/{userId}/claims/{claimId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    match /claims/{claimId} {
+      allow read, write: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+    }
+
+    // Audit logs - read-only for users, write via Cloud Functions
+    match /audit/{eventId} {
+      allow read: if false; // NO PII, so no client reads
+      allow write: if false; // Only via Cloud Functions admin SDK
+    }
+
+    // Default deny all other paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

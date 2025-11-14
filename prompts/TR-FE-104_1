@@ -1,0 +1,40 @@
+#role
+Du er frontendutvikler i Tog Refusjon. Du skal oppdatere TR-FE-104: ved "Bekreft" skal billett lagres i Firebase Storage + metadata i Firestore, men kun hvis bruker er innlogget.
+
+#task
+1) Utvid TicketPreview:
+   - Hvis user!=null:
+     a) Last opp valgt fil til Storage på sti: users/{uid}/tickets/{autoId}/{originalFileName}
+     b) Hent downloadURL
+     c) Skriv metadata til Firestore: /users/{uid}/tickets/{autoId}
+        { date, time, trainNo, from, to, fileName, storagePath, downloadURL, createdAt(serverTimestamp) }
+     d) Vis "Lagret" + redirect til /tickets/{id}
+   - Hvis user==null: vis toast "Logg inn for å lagre" og disable "Bekreft".
+2) Valider filtype (png|jpg|jpeg|pdf) og maks 10 MB.
+3) Feature-flag emulator:
+   - Bruk NEXT_PUBLIC_USE_EMULATORS for connectAuthEmulator/connectFirestoreEmulator.
+4) UI/UX:
+   - Disable knapper under opplasting; vis progress (uploadBytesResumable).
+   - Håndter feil (try/catch) med toast.
+
+#specifics
+- Filer:
+  - src/components/TicketPreview.tsx (oppdater)
+  - src/lib/firebase.ts (eksporter storage via getStorage(app))
+- Storage regler (storage.rules):
+  allow read, write: if request.auth!=null && request.auth.uid == resource.name.split('/')[2];
+- Firestore regler (firestore.rules):
+  /users/{uid}/tickets/{doc}: allow read,write if request.auth.uid==uid;
+- Tech:
+  - TypeScript, 'use client'
+  - Firebase v10: uploadBytesResumable, getDownloadURL, addDoc/setDoc, serverTimestamp
+
+#context
+TR-FE-103 (opplasting) er ferdig. TR-AU-201 kommer etterpå, men app kan allerede ha user fra tidligere.
+
+#examples
+- Ved suksess: toast("Billett lagret"), redirect(`/tickets/${id}`)
+- Ved ikke innlogget: toast("Logg inn for å lagre"), disable "Bekreft"
+
+#notes
+Ikke re-initialiser Firebase. Sørg for at localStorage-draft tømmes etter vellykket lagring.

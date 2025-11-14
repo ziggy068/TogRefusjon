@@ -1,0 +1,11 @@
+# Commit-mal for Tog Refusjon / ClaimPilot
+# Struktur:
+# <type>(<task-id>): <kort beskrivelse>
+#
+# typer: feat, fix, refactor, style, chore, test, docs
+# eksempler:
+# feat(TR-FE-103): billettopplasting fullført
+# fix(TR-FB-101): rettet Firebase-kobling
+# chore: oppdatert avhengigheter
+
+# (slett disse kommentarene før commit)

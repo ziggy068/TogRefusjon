@@ -1,0 +1,38 @@
+#role
+Du er frontendutvikler i Tog Refusjon. Implementer TR-IM-301: QR-skanning av togbillett og parsing til skjema.
+
+#task
+1) Lag skanneside:
+   - Path: src/app/scan/page.tsx ('use client')
+   - getUserMedia(video) + <video> + <canvas>
+   - Hver 200ms: ta frame til canvas, kjør jsQR/bibliotek for QR-dekoding
+2) Parsing:
+   - src/lib/ticketParser.ts: parse(payload:string) -> { date, time, trainNo, from, to }
+   - Håndter kjente formater; fallback til free-text visning hvis ukjent
+3) Integrasjon med opplasting:
+   - Ved vellykket parse: preutfyll TR-FE-103-skjema via localStorage('ticketDraft') og redirect til /upload
+4) UX:
+   - Tillat valg av kamera (hvis flere enheter)
+   - Feilhåndtering: hvis ingen kamera/permission → vis knapp for filopplasting av QR-bilde som fallback
+   - Toast ved funn (“QR funnet – skjema forhåndsutfylt”)
+
+#specifics
+- Avhengighet:
+  npm i jsqr
+- Filer:
+  - src/app/scan/page.tsx
+  - src/lib/ticketParser.ts (+ enkle vitest-tester hvis testoppsett finnes)
+- Sikkerhet/permissions:
+  - Be om kamera, stopp stream på unmount
+- Performance:
+  - requestAnimationFrame eller setInterval(200ms); bruk liten canvas for hastighet
+
+#context
+Data skal inn i samme struktur som TR-FE-103/104 bruker.
+
+#examples
+- Eksempel QR payload → parse → { date:"2025-11-13", time:"07:00", trainNo:"R20", from:"Oslo S", to:"Lillehammer" }
+- Ved ukjent format: vis decoded string og la bruker mappe manuelt
+
+#notes
+Ikke blokker UI ved manglende kamera. Sørg for ren opprydding av MediaStream.
