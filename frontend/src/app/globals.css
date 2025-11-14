@@ -1,0 +1,10 @@
+﻿@import "tailwindcss";
+
+@theme {
+  /* Oslo Bysykkel inspired primary colors */
+  --color-primary-50: #EBF5FF;
+  --color-primary-100: #D1E8FF;
+  --color-primary-300: #66B3FF;
+  --color-primary-500: #005FC9;
+  --color-primary-700: #004494;
+}
