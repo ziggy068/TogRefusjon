@@ -1,34 +1,70 @@
 #role
-Du er frontendutvikler i Tog Refusjon-prosjektet. Du skal implementere TR-AU-201 (Firebase Auth) i Next.js 14 (app-router). Bruk eksisterende Firebase-oppsett fra TR-FE-103/104.
+Du er frontendutvikler i Tog Refusjon-prosjektet. Du skal implementere TR-AU-201 (Firebase Auth) i Next.js 14 (app-router). Bruk eksisterende Firebase-oppsett fra TR-FE-103/104 (felles firebaseClient/init-modul).
 
 #task
 Implementer autentisering i frontend slik:
-1. Opprett /login-side med innlogging via Google og e-post/passord.
-2. Lag en AuthGate-komponent som redirecter til /login hvis bruker ikke er innlogget.
-3. Etter første innlogging skal det automatisk opprettes et dokument i Firestore:
-   `/users/{uid}/profile` med feltene { displayName, email, createdAt }.
-4. Legg "Logg inn" og "Logg ut"-knapper i Navbar, vis brukerens navn når innlogget.
-5. Vis loader mens brukerstatus hentes (onAuthStateChanged).
-6. Hvis `NEXT_PUBLIC_USE_EMULATORS=1`, koble mot lokale emulatorer for Auth.
+
+1. Opprett /login-side med:
+   - Innlogging via Google
+   - Innlogging OG registrering via e-post/passord (egen “Opprett konto”-flyt på samme side eller som toggle)
+2. Lag en AuthGate-komponent som:
+   - Viser loader mens brukerstatus hentes
+   - Redirecter til /login hvis bruker ikke er innlogget
+   - Slipper gjennom children hvis bruker er innlogget
+3. Etter første innlogging (uansett provider) skal det automatisk opprettes et dokument i Firestore:
+   - Path: `users/{uid}` (én doc per bruker, ikke subcollection)
+   - Felter: { displayName, email, createdAt }
+   - `createdAt` skal settes med Firestore `serverTimestamp()`
+   - Sjekk først om doc eksisterer; opprett kun hvis den ikke finnes
+4. Navigasjon:
+   - Legg “Logg inn” og “Logg ut”-knapper i Navbar
+   - Når innlogget: vis kort navn (displayName eller e-post) i Navbar
+   - Etter vellykket login: redirect til `/profile` (eller `/` hvis profil ikke finnes)
+   - Etter logout: redirect til `/login`
+5. Håndter state:
+   - Vis loader mens `onAuthStateChanged` ikke har returnert (både i `useAuth` og i AuthGate)
+   - Disable knapper mens login-kall pågår
+   - Vis enkel feilmelding ved feil login/registrering
+6. Emulator-støtte:
+   - Hvis `NEXT_PUBLIC_USE_EMULATORS=1`, koble mot lokale emulatorer:
+     - `connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true })`
+   - (Hvis Firestore også bruker emulator i prosjektet: ikke endre det, men sørg for at auth-emulator og eksisterende firestore-emulator fungerer sammen.)
 
 #specifics
-- Bruk Firebase SDK v10+ (`import { getAuth, signInWithPopup, GoogleAuthProvider } from 'firebase/auth'`).
-- TypeScript, ‘use client’, React hooks (`useAuth`).
-- Opprett `src/hooks/useAuth.ts` for å eksponere { user, loading, login, logout }.
-- Bruk shadcn/ui-komponenter (Button, Card, Input).
-- Struktur: `src/app/(auth)/login/page.tsx`, `src/components/AuthGate.tsx`, `src/hooks/useAuth.ts`.
+- Bruk Firebase SDK v10+:
+  - `getAuth`, `onAuthStateChanged`, `signInWithPopup`, `GoogleAuthProvider`
+  - `createUserWithEmailAndPassword`, `signInWithEmailAndPassword`, `signOut`
+- Firestore:
+  - Bruk eksisterende `getFirestore()`/`db` fra firebase-init
+  - `setDoc`/`getDoc` på `doc(db, 'users', uid)`
+  - `serverTimestamp()` for `createdAt`
+- Next.js / React:
+  - TypeScript
+  - `use client` der det trengs (login-side, hook, AuthGate, Navbar)
+  - Struktur:
+    - `src/app/(auth)/login/page.tsx`
+    - `src/components/AuthGate.tsx`
+    - `src/hooks/useAuth.ts`
+    - Oppdater ev. `src/components/Navbar.tsx` for login/logout + navn
+- `useAuth` skal eksponere:
+  - `{ user, loading, loginWithGoogle, loginWithEmail, registerWithEmail, logout, error }`
+  - Håndter cleanup av `onAuthStateChanged`-subscription riktig.
 
 #context
-Firebase allerede satt opp, regler vil kreve request.auth.uid for Firestore.
+Firebase er allerede satt opp, og Firestore-regler vil kreve `request.auth.uid` for skriving til `users/{uid}`.
 Dette fullfører milepæl M3: Auth & brukerhåndtering før profil og kravgenerator.
 
 #examples
 - Ved login med Google:
+  - `users/{uid}` opprettes automatisk hvis det ikke finnes
   - redirect til `/profile`
-  - `users/{uid}/profile` opprettes automatisk.
+- Ved login/registrering med e-post/passord:
+  - Samme oppførsel for Firestore-doc og redirect
 - Ved logout:
-  - redirect til `/login`.
+  - Bruker settes til null i `useAuth`
+  - Redirect til `/login`
 
 #notes
-Pass på at du ikke kaller Firebase init to ganger.
-Bruk `onAuthStateChanged` for reaktiv status i AuthGate.
+- Ikke kall Firebase init to ganger – bruk eksisterende init-modul.
+- Bruk `onAuthStateChanged` for reaktiv status i `useAuth`, ikke polling.
+- Sørg for at AuthGate kan wraps rundt sider i app-router (server-komponenter kan bruke klient-komponent som wrapper i layout).

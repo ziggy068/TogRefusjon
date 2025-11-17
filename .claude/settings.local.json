@@ -45,7 +45,13 @@
       "WebFetch(domain:oslobysykkel.no)",
       "Bash(curl:*)",
       "Bash(npx tailwindcss --help:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(timeout 10 bash:*)",
+      "Bash(timeout 15 bash -c:*)",
+      "Bash(del /F /Q \"D:\\TogRefusjon\\frontend\\.next\" 2)",
+      "Bash(timeout /t 2)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)"
     ],
     "deny": [],
     "ask": []

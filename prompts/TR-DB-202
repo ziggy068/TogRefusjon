@@ -1,0 +1,83 @@
+#role
+Du er systemarkitekt og Firebase-ekspert for Tog Refusjon-prosjektet. Du kjenner godt til Firestore (native mode), sikkerhetsregler, indekser og strukturering for skalerbare konsument-apper med mange små transaksjoner.
+
+#task
+Gjennomfør TR-DB-202 – Database for Tog Refusjon:
+1. Definer komplett Firestore-datastruktur for appen.
+2. Lag Firestore-sikkerhetsregler som håndhever at brukere kun ser egne data.
+3. Definer nødvendige indekser for typiske spørringer.
+4. Gi konkrete forslag til felt/typer som støtter videre funksjonalitet (krav, billetter, statusflyt).
+
+Ikke design funksjoner utenfor dette domenet (ingen betaling, admin-UI, rapportering osv.). Fokuser kun på data for bruker, billett, reise, krav og logg/hendelser.
+
+#specifics
+- Stack: Firebase (Firestore + Storage), frontend er Next.js 14 (app-router) med Firebase SDK v10+.
+- Autentisering: Firebase Auth (uid er primær nøkkel for bruker).
+- Viktige domener:
+  - Bruker/profil
+  - Billetter (QR-scan + opplasting av bilde/PDF)
+  - Togreiser (tognummer, dato, planlagt/ankomst)
+  - Krav (refusjonskrav mot togselskap)
+  - Logg/hendelser (statusendringer, e-post sendt, feilmeldinger)
+- Vi skal støtte mange små krav, så lesing/skriving må være billig og enkelt å cache.
+- TR-FE-104 skal kunne lagre billett i Firestore/Storage når bruker er innlogget. Modellen må gjøre dette enkelt:
+  - Ett dokument per billett
+  - Referanse til bruker (uid)
+  - Referanse til fil i Storage (bilde/PDF)
+  - Parsed data fra QR (tognummer, dato, stasjon osv.)
+- Data antas lagret i EU-region (f.eks. europe-west) og skal følge prinsipper om minimal datalagring og enkel sletting (GDPR-vennlig design).
+
+#output
+Lever svaret strukturert slik:
+
+1) **Firestore-struktur (høynivå)**
+   - Beskriv collections/subcollections som et tre:
+     - `/users/{uid}/profile`
+     - `/users/{uid}/tickets/{ticketId}`
+     - `/claims/{claimId}` osv.
+   - Forklar kort hvorfor du velger global collection vs. subcollection.
+   - Vis også en enkel pseudo-JSON-struktur for hver hoved-collection (f.eks. eksempler på dokumenter med felt).
+
+2) **Detaljert feltspec**
+   - Tabell per collection med:
+     - felt-navn
+     - type
+     - eksempelverdi
+     - kort beskrivelse
+   - Inkluder spesielt:
+     - Brukerprofil
+     - Billett
+     - Reise (trip / leg)
+     - Krav
+     - Logg/hendelser
+
+3) **Sikkerhetsregler (firestore.rules)**
+   - Gi et komplett utkast for **Firestore**-regler (ikke Storage-regler) som:
+     - Tillater bare innlogget bruker å lese/endre egne dokumenter.
+     - Tillater lesing av offentlige metadata hvis vi trenger det (f.eks. operator-navn).
+   - Skriv dette som gyldig `firestore.rules`-kode i én blokk.
+   - Kommenter reglene tydelig.
+
+4) **Indekser (firestore.indexes.json-utkast)**
+   - List opp nødvendige indekser for:
+     - Liste brukerens billetter sortert etter dato.
+     - Liste brukerens krav sortert etter status og opprettetDato.
+     - Eventuelle andre spørringer du forventer (f.eks. admin-oversikt for senere).
+   - Skriv dette som et forslag til `firestore.indexes.json`-utdrag.
+
+5) **Implementasjonsnotater til frontend**
+   - Korte, konkrete tips for Next.js-klient:
+     - Hvilke paths som bør brukes for lesing/skriving (konkrete eksempler på dokument/collection-paths).
+     - Hvordan koble billett → krav (referansefelt eller ID) på en enkel måte.
+     - Hvordan gjøre det lett å vise “mine billetter” og “mine krav” uten tunge spørringer (f.eks. standard-filtre og sortering).
+   - Unngå å designe server-side admin-løsninger her; fokuser på hva som bør leses/skrives direkte fra klient (Next.js) med innlogget bruker.
+
+#context
+- Appen er en refusjons-assistent for togreiser (forsinkelser/innstillinger).
+- Målet er maksimal automatisering: billett inn → overvåkning → automatisk beregning av krav → generering av brev/krav.
+- Denne oppgaven (TR-DB-202) handler kun om god datastruktur + Firestore-regler/indekser som grunnmur for senere steg (lagre billett, opprette krav osv.).
+
+#notes
+- Optimaliser for enkelhet først, men tenk at vi kan få svært mange billetter/krav over tid.
+- Unngå overkomplisert normalisering; Firestore tåler og liker litt duplisering for enklere lesing.
+- Svar konsist, men komplett – slik at en utvikler kan kopiere strukturen, reglene og indeksene direkte inn i prosjektet.

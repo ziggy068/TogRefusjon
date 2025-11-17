@@ -5,6 +5,10 @@ const nextConfig = {
   experimental: {
     optimizePackageImports: ['firebase/firestore', 'firebase/auth'],
   },
+  // Eksplisitt sett workspace root for å unngå feildeteksjon av parent lockfile
+  turbopack: {
+    root: __dirname,
+  },
 };
 
 module.exports = nextConfig;

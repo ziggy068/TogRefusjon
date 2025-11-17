@@ -1,55 +1,80 @@
 {
-    "indexes": [
-      {
-        "collectionGroup": "claims",
-        "queryScope": "COLLECTION",
-        "fields": [
-          {
-            "fieldPath": "userId",
-            "order": "ASCENDING"
-          },
-          {
-            "fieldPath": "status",
-            "order": "ASCENDING"
-          },
-          {
-            "fieldPath": "updatedAt",
-            "order": "DESCENDING"
-          }
-        ]
-      },
-      {
-        "collectionGroup": "legs",
-        "queryScope": "COLLECTION",
-        "fields": [
-          {
-            "fieldPath": "userId",
-            "order": "ASCENDING"
-          },
-          {
-            "fieldPath": "status",
-            "order": "ASCENDING"
-          },
-          {
-            "fieldPath": "plannedDepartureUTC",
-            "order": "ASCENDING"
-          }
-        ]
-      },
-      {
-        "collectionGroup": "tickets",
-        "queryScope": "COLLECTION",
-        "fields": [
-          {
-            "fieldPath": "userId",
-            "order": "ASCENDING"
-          },
-          {
-            "fieldPath": "importedAt",
-            "order": "DESCENDING"
-          }
-        ]
-      }
-    ],
-    "fieldOverrides": []
-  }
+  "indexes": [
+    {
+      "collectionGroup": "tickets",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "importedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "tickets",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "claims",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "claims",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "legs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "plannedDepartureUTC", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "legs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "trackingStatus", "order": "ASCENDING" },
+        { "fieldPath": "lastCheckedAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "journeyInstances",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "naturalKey", "order": "ASCENDING" },
+        { "fieldPath": "serviceDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "journeyInstances",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "operator", "order": "ASCENDING" },
+        { "fieldPath": "serviceDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "journeyInstances",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "trainNumber", "order": "ASCENDING" },
+        { "fieldPath": "serviceDate", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

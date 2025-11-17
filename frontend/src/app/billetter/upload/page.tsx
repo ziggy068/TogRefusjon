@@ -8,6 +8,7 @@ import { Input, Textarea } from "@/components/forms";
 import { fileToDataURL } from "@/lib/file";
 import { db, auth, storage } from "@/lib/firebase";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import AuthGate from "@/components/AuthGate";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 
 // Validation schema
@@ -36,7 +37,7 @@ const uploadSchema = z.object({
 
 type UploadFormData = z.infer<typeof uploadSchema>;
 
-export default function UploadTicketPage() {
+function UploadTicketPageContent() {
   const router = useRouter();
   const [preview, setPreview] = useState<{
     name: string;
@@ -577,5 +578,13 @@ export default function UploadTicketPage() {
       </div>
       </div>
     </div>
+  );
+}
+
+export default function UploadTicketPage() {
+  return (
+    <AuthGate>
+      <UploadTicketPageContent />
+    </AuthGate>
   );
 }

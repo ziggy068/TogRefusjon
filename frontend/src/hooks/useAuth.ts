@@ -109,8 +109,10 @@ export function useAuth() {
 
   const logout = async () => {
     try {
-      await signOut(auth);
+      // Navigate first to prevent Firestore permission errors during logout
       router.push("/login");
+      // Then sign out (Firebase will update listeners)
+      await signOut(auth);
     } catch (error) {
       console.error("Error logging out:", error);
       throw error;

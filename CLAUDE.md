@@ -202,3 +202,7 @@ When implementing a feature:
 - Complete partner API (use email parser + manual upload)
 - Multi-country support (Norway only initially)
 - Flight/bus claims (trains only)
+# Tog Refusjon – CLAUDE.md
+
+
+

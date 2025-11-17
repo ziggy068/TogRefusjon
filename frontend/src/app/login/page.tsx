@@ -1,15 +1,24 @@
 "use client";
-import { useState, FormEvent } from "react";
+import { useState, FormEvent, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { Input } from "@/components/forms";
 import { validateEmail, validatePassword } from "@/lib/validation";
 
 export default function LoginPage() {
+  const searchParams = useSearchParams();
   const { loginWithGoogle, loginWithEmail, signupWithEmail } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [isSignup, setIsSignup] = useState(false);
+
+  // Check for signup query parameter on mount
+  useEffect(() => {
+    if (searchParams.get("signup") === "true") {
+      setIsSignup(true);
+    }
+  }, [searchParams]);
   const [errors, setErrors] = useState<{
     email?: string;
     password?: string;

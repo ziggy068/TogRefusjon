@@ -118,6 +118,7 @@ export default function TicketPreview() {
       await uploadPromise.then(async (downloadURL) => {
         // Save metadata to Firestore
         const ticketData = {
+          userId: user.uid,
           date: draft.dato,
           time: draft.klokkeslett,
           trainNo: draft.tognummer,

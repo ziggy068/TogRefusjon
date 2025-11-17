@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import Navigation from "@/components/Navigation";
 
 export const metadata: Metadata = {
   title: "Tog Refusjon",
@@ -19,6 +20,7 @@ export default function RootLayout({
   return (
     <html lang="no">
       <body className="antialiased">
+        <Navigation />
         {children}
       </body>
     </html>

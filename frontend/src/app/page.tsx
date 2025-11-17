@@ -42,12 +42,12 @@ export default function Home() {
             {/* CTA */}
             <div className="pt-4 flex flex-col sm:flex-row gap-4 justify-center md:justify-start">
               <Link
-                href="/login"
+                href="/login?signup=true"
                 className={`inline-flex items-center justify-center px-8 py-4 text-lg font-semibold rounded-full transition-colors duration-200 bg-primary-500 text-white hover:bg-primary-700 shadow-sm hover:shadow-md focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 ${
                   status !== "Klar" ? "opacity-50 pointer-events-none" : ""
                 }`}
               >
-                Kom i gang
+                Opprett bruker
               </Link>
               <a
                 href="#how-it-works"
@@ -55,6 +55,14 @@ export default function Home() {
               >
                 Slik fungerer det
               </a>
+              <Link
+                href="/login"
+                className={`inline-flex items-center justify-center px-8 py-4 text-lg font-semibold rounded-full transition-colors duration-200 bg-primary-500 text-white hover:bg-primary-700 shadow-sm hover:shadow-md focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 ${
+                  status !== "Klar" ? "opacity-50 pointer-events-none" : ""
+                }`}
+              >
+                Logg inn
+              </Link>
             </div>
           </div>
 
@@ -150,7 +158,7 @@ export default function Home() {
 
           <div className="text-center mt-12">
             <Link
-              href="/login"
+              href="/login?signup=true"
               className={`inline-flex items-center justify-center px-8 py-4 text-lg font-semibold rounded-full transition-colors duration-200 bg-primary-500 text-white hover:bg-primary-700 shadow-sm hover:shadow-md focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 ${
                 status !== "Klar" ? "opacity-50 pointer-events-none" : ""
               }`}

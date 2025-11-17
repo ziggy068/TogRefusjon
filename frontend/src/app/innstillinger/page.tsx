@@ -1,6 +1,7 @@
 "use client";
+import AuthGate from "@/components/AuthGate";
 
-export default function InnstillingerPage() {
+function InnstillingerPageContent() {
   return (
     <div className="min-h-screen bg-slate-300">
       <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
@@ -127,5 +128,13 @@ export default function InnstillingerPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function InnstillingerPage() {
+  return (
+    <AuthGate>
+      <InnstillingerPageContent />
+    </AuthGate>
   );
 }

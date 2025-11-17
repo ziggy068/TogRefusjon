@@ -1,4 +1,6 @@
-export default function StatusPage() {
+import AuthGate from "@/components/AuthGate";
+
+function StatusPageContent() {
   return (
     <div className="min-h-screen bg-slate-300">
       <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
@@ -60,5 +62,13 @@ export default function StatusPage() {
       {/* Coming soon from TR-TS-401, TR-RU-501, TR-CL-601 */}
       </div>
     </div>
+  );
+}
+
+export default function StatusPage() {
+  return (
+    <AuthGate>
+      <StatusPageContent />
+    </AuthGate>
   );
 }

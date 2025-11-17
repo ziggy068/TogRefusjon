@@ -2,7 +2,11 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helper functions
+
+    // ==========================================
+    // Helper Functions
+    // ==========================================
+
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -11,48 +15,123 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // User profiles
+    function isValidUserData() {
+      // Validate that userId matches auth.uid on create
+      return request.resource.data.userId == request.auth.uid;
+    }
+
+    // ==========================================
+    // User Collection
+    // ==========================================
+
+    // User root document (read/write own profile)
     match /users/{userId} {
-      // Users can read and write their own profile
       allow read, write: if isOwner(userId);
+
+      // User profile subcollection
+      match /profile/{document=**} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // User tickets subcollection
+      match /tickets/{ticketId} {
+        // DEV: Allow read from API routes (request.auth is null in server context)
+        // TODO PROD: Restrict this to authenticated users only when moving to Admin SDK
+        allow read: if true;
+        allow create: if isOwner(userId) && isValidUserData();
+        allow update, delete: if isOwner(userId);
+      }
+
+      // User claims subcollection
+      match /claims/{claimId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidUserData();
+        allow update, delete: if isOwner(userId);
+      }
     }
 
-    // User tickets (subcollection under users)
-    match /users/{userId}/tickets/{ticketId} {
-      // Users can read and write their own tickets
-      allow read, write: if isOwner(userId);
-    }
+    // ==========================================
+    // Global Collections (Legacy - DEPRECATED)
+    // ==========================================
 
-    // Legacy tickets collection (global) - DEPRECATED, use users/{userId}/tickets instead
+    // Legacy tickets (global) - prefer users/{uid}/tickets
     match /tickets/{ticketId} {
-      // Users can only read/write tickets they created
-      allow read, write: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && isValidUserData();
+      allow update, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
 
-    // Legs collection: users can only read/write their own legs
+    // Legacy claims (global) - prefer users/{uid}/claims
+    match /claims/{claimId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && isValidUserData();
+      allow update, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // ==========================================
+    // Legs Collection (Global, User-Scoped)
+    // ==========================================
+
     match /legs/{legId} {
-      allow read, write: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && isValidUserData();
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
 
-    // Claims (future implementation) - can be global or subcollection
-    match /users/{userId}/claims/{claimId} {
-      allow read, write: if isOwner(userId);
+    // ==========================================
+    // Audit Logs (Server-Side Only)
+    // ==========================================
+
+    match /audit/{eventId} {
+      // NO client reads or writes
+      // Only Cloud Functions can write via Admin SDK
+      allow read, write: if false;
     }
+
+    // ==========================================
+    // JourneyInstances (TR-JR-301) - Global Collection
+    // ==========================================
+
+    match /journeyInstances/{instanceId} {
+      // DEV: Allow all read/write (client + API routes without auth)
+      // TODO PROD: Restrict to:
+      //   - read: authenticated users who have claims referencing this journey
+      //   - write: Cloud Functions only (Admin SDK)
+      allow read, write: if true;
+    }
+
+    // ==========================================
+    // Claims (TR-JR-302) - Global Collection
+    // ==========================================
+    // Note: This is a DUPLICATE match block. The first one at line 63-67
+    // applies more restrictive rules. This block is evaluated with OR logic.
 
     match /claims/{claimId} {
-      allow read, write: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      // DEV: Allow all read/write (client + API routes without auth)
+      // TODO PROD: Restrict to:
+      //   - read: authenticated user who owns the claim (userId field)
+      //   - write: Cloud Functions only (Admin SDK)
+      allow read, write: if true;
     }
 
-    // Audit logs - read-only for users, write via Cloud Functions
-    match /audit/{eventId} {
-      allow read: if false; // NO PII, so no client reads
-      allow write: if false; // Only via Cloud Functions admin SDK
+
+
+    // ==========================================
+    // Operators (Public Read, Admin Write)
+    // ==========================================
+
+    match /operators/{operatorId} {
+      // Public read for operator metadata
+      allow read: if true;
+      // Only admin/Cloud Functions can write
+      allow write: if false;
     }
 
-    // Default deny all other paths
+    // ==========================================
+    // Default Deny All
+    // ==========================================
+
     match /{document=**} {
       allow read, write: if false;
     }

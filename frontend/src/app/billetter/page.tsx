@@ -4,6 +4,7 @@ import Link from "next/link";
 import { db, auth, storage } from "@/lib/firebase";
 import { doc, deleteDoc } from "firebase/firestore";
 import { ref, deleteObject } from "firebase/storage";
+import AuthGate from "@/components/AuthGate";
 
 interface Ticket {
   id: string;
@@ -23,7 +24,7 @@ interface Ticket {
   claimStatus?: "none" | "pending" | "submitted" | "approved" | "rejected";
 }
 
-export default function BilletterPage() {
+function BilletterPageContent() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -371,5 +372,13 @@ export default function BilletterPage() {
       )}
       </div>
     </div>
+  );
+}
+
+export default function BilletterPage() {
+  return (
+    <AuthGate>
+      <BilletterPageContent />
+    </AuthGate>
   );
 }
