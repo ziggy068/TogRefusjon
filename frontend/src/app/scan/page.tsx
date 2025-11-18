@@ -153,14 +153,17 @@ function ScanPageContent() {
 
     if (parsed) {
       try {
-        // TR-IM-303: Optional train lookup as fallback if stations are missing
+        // TR-IM-303, TR-IM-304: Optional train lookup as fallback if stations are missing
         let enrichedParsed = { ...parsed };
+        let lookupAttempted = false;
 
         // Check if we're missing critical station info
         const missingStations = !parsed.from || !parsed.to || parsed.from === "Ukjent" || parsed.to === "Ukjent";
 
         if (missingStations && parsed.trainNo && parsed.date) {
-          console.log("[Scan] Missing station data, attempting Entur lookup...");
+          console.log("[QR] Missing station data, attempting Entur lookup...");
+          lookupAttempted = true;
+
           try {
             const lookupResult = await lookupTrainByNumber({
               trainNumber: parsed.trainNo,
@@ -168,7 +171,7 @@ function ScanPageContent() {
             });
 
             if (lookupResult) {
-              console.log("[Scan] Entur lookup successful, enriching ticket data");
+              console.log("[QR] Entur lookup successful:", lookupResult.fromStationName, "→", lookupResult.toStationName);
               enrichedParsed.from = lookupResult.fromStationName;
               enrichedParsed.to = lookupResult.toStationName;
 
@@ -178,11 +181,11 @@ function ScanPageContent() {
                 enrichedParsed.time = depDateTime.toTimeString().slice(0, 5);
               }
             } else {
-              console.log("[Scan] Entur lookup returned no results, using QR data as-is");
+              console.log("[QR] Entur lookup found no results, using QR data as-is");
             }
           } catch (lookupError: any) {
             // Don't fail the whole flow if lookup fails - log and continue
-            console.warn("[Scan] Entur lookup failed, continuing with QR data:", lookupError.message);
+            console.warn("[QR] Entur lookup failed, continuing with QR data:", lookupError.message);
           }
         }
 
@@ -190,9 +193,14 @@ function ScanPageContent() {
         const ticketInput = normalizeFromQR(enrichedParsed, user.uid);
         const docRef = await saveTicketForUser(user.uid, ticketInput);
 
-        console.log("[Scan] QR ticket saved:", docRef.id);
+        console.log("[QR] Ticket saved successfully:", docRef.id);
 
-        showToast("✅ Billett lagret fra QR-kode!", "success");
+        // Show appropriate success message
+        if (lookupAttempted && (enrichedParsed.from === "Ukjent" || enrichedParsed.to === "Ukjent")) {
+          showToast("Billett lagret! Kunne ikke hente stasjonsnavn automatisk.", "success");
+        } else {
+          showToast("Billett lagret fra QR-kode!", "success");
+        }
 
         // Stop camera and redirect to tickets list
         stopCamera();
@@ -200,9 +208,9 @@ function ScanPageContent() {
           router.push("/billetter");
         }, 1000);
       } catch (error: any) {
-        console.error("[Scan] Error saving QR ticket:", error);
+        console.error("[QR] Error saving ticket:", error);
         showToast(
-          `Kunne ikke lagre billett: ${error.message}`,
+          "Kunne ikke lagre billett. Prov igjen.",
           "error"
         );
       }

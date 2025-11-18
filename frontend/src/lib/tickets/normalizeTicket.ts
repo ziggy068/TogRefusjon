@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Ticket normalization functions
  * Converts various input sources (QR, manual, email) into unified Ticket format
  */
@@ -139,11 +139,11 @@ export function validateTicketInput(input: TicketInput): string[] {
 
   // Validate ISO 8601 timestamp format
   if (input.departureTime && !isValidISOTimestamp(input.departureTime)) {
-    errors.push("Ugyldig avgangstid-format (ma vare ISO 8601)");
+    errors.push("Ugyldig avgangstid-format (maa vaere ISO 8601)");
   }
 
   if (input.arrivalTime && !isValidISOTimestamp(input.arrivalTime)) {
-    errors.push("Ugyldig ankomsttid-format (ma vare ISO 8601)");
+    errors.push("Ugyldig ankomsttid-format (maa vaere ISO 8601)");
   }
 
   return errors;

@@ -69,16 +69,16 @@ function AddTicketPageContent() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  // Handle train lookup (TR-IM-303)
+  // Handle train lookup (TR-IM-303, TR-IM-304)
   const handleTrainLookup = async () => {
     // Validate required fields for lookup
     if (!formData.trainNumber) {
-      showToast("Vennligst fyll inn tognummer forst", "error");
+      showToast("Vennligst fyll inn tognummer først", "error");
       return;
     }
 
     if (!formData.departureDate) {
-      showToast("Vennligst fyll inn avgangsdato forst", "error");
+      showToast("Vennligst fyll inn avgangsdato først", "error");
       return;
     }
 
@@ -91,14 +91,15 @@ function AddTicketPageContent() {
       });
 
       if (!result) {
+        console.log(`[Lookup] No train found for ${formData.trainNumber} on ${formData.departureDate}`);
         showToast(
-          `Fant ikke tog ${formData.trainNumber} pa ${formData.departureDate}. Kontroller tognummer og dato.`,
+          `Fant ikke tog ${formData.trainNumber} på ${formData.departureDate}. Du kan fylle inn feltene manuelt.`,
           "error"
         );
         return;
       }
 
-      console.log("[Train Lookup] Found:", result);
+      console.log("[Lookup] Found train:", result.fromStationName, "→", result.toStationName);
 
       // Extract date and time from ISO timestamps
       const depDateTime = new Date(result.plannedDepartureTime);
@@ -144,11 +145,11 @@ function AddTicketPageContent() {
 
       setFormData((prev) => ({ ...prev, ...updates }));
 
-      showToast(`Fant tog og fylte inn strekning: ${result.fromStationName} til ${result.toStationName}`, "success");
+      showToast(`Fant tog: ${result.fromStationName} → ${result.toStationName}`, "success");
     } catch (error: any) {
-      console.error("[Train Lookup] Error:", error);
+      console.error("[Lookup] Error fetching train data:", error);
       showToast(
-        `Kunne ikke soke etter tog: ${error.message}`,
+        "Kunne ikke hente strekning nå. Prøv igjen eller fyll inn manuelt.",
         "error"
       );
     } finally {
@@ -156,20 +157,20 @@ function AddTicketPageContent() {
     }
   };
 
-  // Handle form submission
+  // Handle form submission (TR-IM-304)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const user = auth.currentUser;
     if (!user) {
-      showToast("Du ma vare innlogget for a legge til billetter", "error");
+      showToast("Du må være innlogget for å legge til billetter", "error");
       router.push("/login");
       return;
     }
 
     // Validate required fields
     if (!formData.operator || !formData.trainNumber || !formData.departureDate || !formData.departureTime || !formData.fromStation || !formData.toStation) {
-      showToast("Vennligst fyll ut alle felter (bruk 'Hent strekning' eller fyll manuelt)", "error");
+      showToast("Vennligst fyll ut alle påkrevde felter", "error");
       return;
     }
 
@@ -198,7 +199,7 @@ function AddTicketPageContent() {
       // Save to Firestore
       const docRef = await saveTicketForUser(user.uid, ticketInput);
 
-      console.log("[Add Ticket] Saved:", docRef.id);
+      console.log("[Save] Ticket saved successfully:", docRef.id);
 
       showToast("Billett lagret!", "success");
 
@@ -207,9 +208,9 @@ function AddTicketPageContent() {
         router.push("/billetter");
       }, 1000);
     } catch (error: any) {
-      console.error("[Add Ticket] Error:", error);
+      console.error("[Save] Error saving ticket:", error);
       showToast(
-        `Kunne ikke lagre billett: ${error.message}`,
+        "Kunne ikke lagre billett. Prøv igjen.",
         "error"
       );
     } finally {
@@ -311,10 +312,10 @@ function AddTicketPageContent() {
                 <span className="text-xl">=</span>
                 <div className="flex-1">
                   <p className="text-sm font-medium text-primary-900 mb-2">
-                    Hent strekning fra tognummer
+                    Automatisk utfylling fra Entur
                   </p>
                   <p className="text-xs text-primary-700 mb-3">
-                    Hvis du vet tognummer og dato, kan vi automatisk finne strekning og avgangstid fra Entur.
+                    Vi fyller inn operator, strekning og avgangstid automatisk. Du kan justere feltene etterpaa hvis nodvendig.
                   </p>
                   <Button
                     type="button"
