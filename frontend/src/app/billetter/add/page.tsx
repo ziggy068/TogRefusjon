@@ -46,14 +46,11 @@ function AddTicketPageContent() {
   const [selectedDeparture, setSelectedDeparture] = useState<TrainLookupResult | null>(null);
   const [availableToStations, setAvailableToStations] = useState<Array<{name: string, arrivalTime: string}>>([]);
 
-  // Station search mode (TR-IM-310)
-  const [searchMode, setSearchMode] = useState<'trainNumber' | 'station'>('trainNumber');
-  const [stationSearchTerm, setStationSearchTerm] = useState('');
-  const [stationSuggestions, setStationSuggestions] = useState<StationSuggestion[]>([]);
-  const [selectedStation, setSelectedStation] = useState<StationSuggestion | null>(null);
-  const [stationDepartures, setStationDepartures] = useState<Departure[]>([]);
-  const [isSearchingStations, setIsSearchingStations] = useState(false);
-  const [isLoadingDepartures, setIsLoadingDepartures] = useState(false);
+  // Manual station input autocomplete (TR-IM-310)
+  const [fromStationSuggestions, setFromStationSuggestions] = useState<StationSuggestion[]>([]);
+  const [toStationSuggestions, setToStationSuggestions] = useState<StationSuggestion[]>([]);
+  const [isSearchingFromStation, setIsSearchingFromStation] = useState(false);
+  const [isSearchingToStation, setIsSearchingToStation] = useState(false);
 
   // Common Norwegian operators
   const commonOperators = ["Vy", "SJ Norge", "Go-Ahead Nordic"];
@@ -232,84 +229,54 @@ function AddTicketPageContent() {
     console.log(`[StationSelect] To: ${stationName}, arrival: ${toStation.arrivalTime}`);
   };
 
-  // Station search handlers (TR-IM-310)
+  // Manual station autocomplete handlers (TR-IM-310)
 
-  // Debounced station search
-  const handleStationSearch = useCallback(async (searchTerm: string) => {
-    setStationSearchTerm(searchTerm);
-
+  // From-station autocomplete
+  const handleFromStationSearch = useCallback(async (searchTerm: string) => {
     if (searchTerm.trim().length < 2) {
-      setStationSuggestions([]);
+      setFromStationSuggestions([]);
       return;
     }
 
-    setIsSearchingStations(true);
+    setIsSearchingFromStation(true);
     try {
       const suggestions = await searchStations(searchTerm);
-      setStationSuggestions(suggestions);
-      console.log(`[StationSearch] Found ${suggestions.length} stations for "${searchTerm}"`);
+      setFromStationSuggestions(suggestions);
     } catch (error: any) {
-      console.error('[StationSearch] Error:', error);
-      showToast('Kunne ikke søke etter stasjoner', 'error');
+      console.error('[FromStationSearch] Error:', error);
     } finally {
-      setIsSearchingStations(false);
+      setIsSearchingFromStation(false);
     }
-  }, [showToast]);
+  }, []);
 
-  // Handle station selection from autocomplete
-  const handleStationSelect = async (station: StationSuggestion) => {
-    setSelectedStation(station);
-    setStationSearchTerm(station.name);
-    setStationSuggestions([]);
-
-    // Validate date
-    if (!formData.departureDate) {
-      showToast('Vennligst velg avgangsdato først', 'error');
+  // To-station autocomplete
+  const handleToStationSearch = useCallback(async (searchTerm: string) => {
+    if (searchTerm.trim().length < 2) {
+      setToStationSuggestions([]);
       return;
     }
 
-    // Load departures from this station
-    setIsLoadingDepartures(true);
+    setIsSearchingToStation(true);
     try {
-      const departures = await getDeparturesFromStation(station.id, formData.departureDate);
-      setStationDepartures(departures);
-      console.log(`[StationDepartures] Found ${departures.length} departures from ${station.name}`);
-
-      if (departures.length === 0) {
-        showToast(`Ingen avganger funnet fra ${station.name} på ${formData.departureDate}`, 'info');
-      } else {
-        showToast(`Fant ${departures.length} avgang${departures.length > 1 ? 'er' : ''} fra ${station.name}`, 'success');
-      }
+      const suggestions = await searchStations(searchTerm);
+      setToStationSuggestions(suggestions);
     } catch (error: any) {
-      console.error('[StationDepartures] Error:', error);
-      showToast('Kunne ikke hente avganger', 'error');
+      console.error('[ToStationSearch] Error:', error);
     } finally {
-      setIsLoadingDepartures(false);
+      setIsSearchingToStation(false);
     }
+  }, []);
+
+  // Select from-station from autocomplete
+  const handleSelectFromStation = (station: StationSuggestion) => {
+    setFormData((prev) => ({ ...prev, fromStation: station.name }));
+    setFromStationSuggestions([]);
   };
 
-  // Handle departure selection from station list
-  const handleDepartureSelect = async (departure: Departure) => {
-    console.log(`[DepartureSelect] Selected ${departure.trainNumber} to ${departure.destination}`);
-
-    // Fill in train number and trigger train lookup
-    setFormData((prev) => ({
-      ...prev,
-      trainNumber: departure.trainNumber,
-      operator: departure.operator,
-    }));
-
-    // Switch back to train number mode and trigger lookup
-    setSearchMode('trainNumber');
-
-    // Clear station search state
-    setStationSearchTerm('');
-    setStationSuggestions([]);
-    setSelectedStation(null);
-    setStationDepartures([]);
-
-    // Trigger train lookup with the selected train number
-    await performTrainLookup(departure.trainNumber, formData.departureDate);
+  // Select to-station from autocomplete
+  const handleSelectToStation = (station: StationSuggestion) => {
+    setFormData((prev) => ({ ...prev, toStation: station.name }));
+    setToStationSuggestions([]);
   };
 
   // Extract train lookup logic for reuse
@@ -455,147 +422,20 @@ function AddTicketPageContent() {
               </select>
             </div>
 
-            {/* Search Mode Toggle (TR-IM-310) */}
-            <div className="bg-slate-100 border border-slate-300 rounded-lg p-4">
-              <label className="block text-sm font-medium text-slate-900 mb-3">
-                Søkemåte
+            {/* Train Number - for automatic lookup */}
+            <div>
+              <label className="block text-sm font-medium text-slate-900 mb-2">
+                Tognummer <span className="text-rose-500">* (for automatisk oppslag)</span>
               </label>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setSearchMode('trainNumber')}
-                  className={`flex-1 px-4 py-2 rounded-lg font-medium transition ${
-                    searchMode === 'trainNumber'
-                      ? 'bg-primary-600 text-white'
-                      : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50'
-                  }`}
-                >
-                  Tognummer
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSearchMode('station')}
-                  className={`flex-1 px-4 py-2 rounded-lg font-medium transition ${
-                    searchMode === 'station'
-                      ? 'bg-primary-600 text-white'
-                      : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50'
-                  }`}
-                >
-                  Stasjon
-                </button>
-              </div>
+              <input
+                type="text"
+                name="trainNumber"
+                value={formData.trainNumber}
+                onChange={handleChange}
+                placeholder="F.eks. R20, L14, IC801"
+                className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
             </div>
-
-            {/* Train Number (only show if train number mode) */}
-            {searchMode === 'trainNumber' && (
-              <div>
-                <label className="block text-sm font-medium text-slate-900 mb-2">
-                  Tognummer <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  name="trainNumber"
-                  value={formData.trainNumber}
-                  onChange={handleChange}
-                  required
-                  placeholder="F.eks. R20, L14, IC801"
-                  className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
-            )}
-
-            {/* Station Search (only show if station mode) */}
-            {searchMode === 'station' && (
-              <div className="space-y-4">
-                <div className="relative">
-                  <label className="block text-sm font-medium text-slate-900 mb-2">
-                    Søk etter stasjon <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={stationSearchTerm}
-                    onChange={(e) => handleStationSearch(e.target.value)}
-                    placeholder="Begynn å skrive stasjonsnavn..."
-                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  />
-
-                  {/* Autocomplete suggestions */}
-                  {stationSuggestions.length > 0 && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-slate-300 rounded-lg shadow-lg max-h-64 overflow-y-auto">
-                      {stationSuggestions.map((suggestion) => (
-                        <button
-                          key={suggestion.id}
-                          type="button"
-                          onClick={() => handleStationSelect(suggestion)}
-                          className="w-full text-left px-4 py-3 hover:bg-slate-50 transition border-b border-slate-200 last:border-b-0"
-                        >
-                          <div className="font-medium text-slate-900">{suggestion.name}</div>
-                          {suggestion.locality && (
-                            <div className="text-sm text-slate-600">{suggestion.locality}</div>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {isSearchingStations && (
-                    <div className="absolute right-3 top-11 text-slate-400">
-                      Søker...
-                    </div>
-                  )}
-                </div>
-
-                {/* Station departures list */}
-                {isLoadingDepartures && (
-                  <div className="text-center py-8 text-slate-600">
-                    Laster avganger...
-                  </div>
-                )}
-
-                {stationDepartures.length > 0 && (
-                  <div>
-                    <h3 className="text-sm font-medium text-slate-900 mb-3">
-                      Avganger fra {selectedStation?.name} ({stationDepartures.length})
-                    </h3>
-                    <div className="space-y-2 max-h-96 overflow-y-auto">
-                      {stationDepartures.map((departure, idx) => (
-                        <button
-                          key={`${departure.serviceJourneyId}-${idx}`}
-                          type="button"
-                          onClick={() => handleDepartureSelect(departure)}
-                          className="w-full text-left px-4 py-3 border border-slate-300 rounded-lg hover:bg-slate-50 hover:border-primary-500 transition"
-                        >
-                          <div className="flex justify-between items-start mb-1">
-                            <div className="font-bold text-lg text-primary-600">
-                              {departure.trainNumber}
-                            </div>
-                            <div className="text-sm font-medium text-slate-900">
-                              {new Date(departure.departureTime).toLocaleTimeString('no', {
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })}
-                            </div>
-                          </div>
-                          <div className="text-sm text-slate-700 mb-1">
-                            → {departure.destination}
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <div className="text-xs text-slate-600">
-                              {departure.operator}
-                            </div>
-                            {departure.platform && (
-                              <div className="text-xs text-slate-600">
-                                Spor {departure.platform}
-                              </div>
-                            )}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
 
             {/* Departure Date & Time */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -626,8 +466,7 @@ function AddTicketPageContent() {
               </div>
             </div>
 
-            {/* Train Lookup Button (TR-IM-303) - Only in trainNumber mode */}
-            {searchMode === 'trainNumber' && (
+            {/* Train Lookup Button (TR-IM-303) */
               <div className="bg-primary-50 border border-primary-200 rounded-lg p-4">
               <div className="flex items-start gap-3">
                 <span className="text-xl">=</span>
@@ -650,9 +489,8 @@ function AddTicketPageContent() {
                 </div>
               </div>
             </div>
-            )}
 
-            {/* Arrival Date & Time (optional) */}
+            {/* Arrival Date & Time (optional */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-900 mb-2">
@@ -751,33 +589,92 @@ function AddTicketPageContent() {
               </div>
             )}
 
-            {/* From & To Stations (manual input fallback) */}
+            {/* From & To Stations (manual input with autocomplete) */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
+              {/* From Station */}
+              <div className="relative">
                 <label className="block text-sm font-medium text-slate-900 mb-2">
-                  Fra-stasjon {allStations.length > 0 ? "(eller juster manuelt)" : "(fylles ved oppslag)"}
+                  Fra-stasjon <span className="text-slate-600">(fylles ved oppslag eller manuelt)</span>
                 </label>
                 <input
                   type="text"
                   name="fromStation"
                   value={formData.fromStation}
-                  onChange={handleChange}
-                  placeholder="F.eks. Oslo S"
+                  onChange={(e) => {
+                    handleChange(e);
+                    handleFromStationSearch(e.target.value);
+                  }}
+                  placeholder="Begynn å skrive stasjonsnavn..."
                   className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                 />
+
+                {/* From station autocomplete */}
+                {fromStationSuggestions.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-slate-300 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                    {fromStationSuggestions.map((suggestion) => (
+                      <button
+                        key={suggestion.id}
+                        type="button"
+                        onClick={() => handleSelectFromStation(suggestion)}
+                        className="w-full text-left px-4 py-3 hover:bg-slate-50 transition border-b border-slate-200 last:border-b-0"
+                      >
+                        <div className="font-medium text-slate-900">{suggestion.name}</div>
+                        {suggestion.locality && (
+                          <div className="text-sm text-slate-600">{suggestion.locality}</div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {isSearchingFromStation && (
+                  <div className="absolute right-3 top-11 text-slate-400">
+                    Søker...
+                  </div>
+                )}
               </div>
-              <div>
+
+              {/* To Station */}
+              <div className="relative">
                 <label className="block text-sm font-medium text-slate-900 mb-2">
-                  Til-stasjon {allStations.length > 0 ? "(eller juster manuelt)" : "(fylles ved oppslag)"}
+                  Til-stasjon <span className="text-slate-600">(fylles ved oppslag eller manuelt)</span>
                 </label>
                 <input
                   type="text"
                   name="toStation"
                   value={formData.toStation}
-                  onChange={handleChange}
-                  placeholder="F.eks. Trondheim S"
+                  onChange={(e) => {
+                    handleChange(e);
+                    handleToStationSearch(e.target.value);
+                  }}
+                  placeholder="Begynn å skrive stasjonsnavn..."
                   className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                 />
+
+                {/* To station autocomplete */}
+                {toStationSuggestions.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-slate-300 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                    {toStationSuggestions.map((suggestion) => (
+                      <button
+                        key={suggestion.id}
+                        type="button"
+                        onClick={() => handleSelectToStation(suggestion)}
+                        className="w-full text-left px-4 py-3 hover:bg-slate-50 transition border-b border-slate-200 last:border-b-0"
+                      >
+                        <div className="font-medium text-slate-900">{suggestion.name}</div>
+                        {suggestion.locality && (
+                          <div className="text-sm text-slate-600">{suggestion.locality}</div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {isSearchingToStation && (
+                  <div className="absolute right-3 top-11 text-slate-400">
+                    Søker...
+                  </div>
+                )}
               </div>
             </div>
 
