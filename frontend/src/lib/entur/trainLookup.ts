@@ -33,18 +33,44 @@ export interface TrainLookupParams {
 }
 
 // Major Norwegian train stations to search from
-// Expanded list to catch more train departures
+// Comprehensive list to capture trains in both directions
 const MAJOR_STATIONS = [
+  // Major terminals (endpoints of lines)
   { id: 'NSR:StopPlace:548', name: 'Oslo S' },
   { id: 'NSR:StopPlace:337', name: 'Trondheim S' },
   { id: 'NSR:StopPlace:418', name: 'Bergen stasjon' },
   { id: 'NSR:StopPlace:595', name: 'Stavanger stasjon' },
-  { id: 'NSR:StopPlace:551', name: 'Drammen stasjon' },
-  { id: 'NSR:StopPlace:59', name: 'Lillehammer stasjon' },
-  { id: 'NSR:StopPlace:552', name: 'Hamar stasjon' },
-  { id: 'NSR:StopPlace:550', name: 'Eidsvoll stasjon' },
-  { id: 'NSR:StopPlace:360', name: 'Kristiansand stasjon' },
   { id: 'NSR:StopPlace:109', name: 'Bodø stasjon' },
+  { id: 'NSR:StopPlace:360', name: 'Kristiansand stasjon' },
+
+  // Important intermediate stations on Oslo-Trondheim route
+  { id: 'NSR:StopPlace:552', name: 'Hamar stasjon' },
+  { id: 'NSR:StopPlace:59', name: 'Lillehammer stasjon' },
+  { id: 'NSR:StopPlace:550', name: 'Eidsvoll stasjon' },
+  { id: 'NSR:StopPlace:56', name: 'Dombås stasjon' },
+  { id: 'NSR:StopPlace:335', name: 'Oppdal stasjon' },
+
+  // Oslo area and Vestfold line
+  { id: 'NSR:StopPlace:551', name: 'Drammen stasjon' },
+  { id: 'NSR:StopPlace:592', name: 'Skien stasjon' },
+  { id: 'NSR:StopPlace:584', name: 'Porsgrunn stasjon' },
+  { id: 'NSR:StopPlace:362', name: 'Larvik stasjon' },
+  { id: 'NSR:StopPlace:588', name: 'Sandefjord stasjon' },
+  { id: 'NSR:StopPlace:356', name: 'Tønsberg stasjon' },
+
+  // Bergen line
+  { id: 'NSR:StopPlace:62', name: 'Voss stasjon' },
+  { id: 'NSR:StopPlace:303', name: 'Myrdal stasjon' },
+  { id: 'NSR:StopPlace:54', name: 'Finse stasjon' },
+  { id: 'NSR:StopPlace:53', name: 'Geilo stasjon' },
+
+  // Sørlandet (southern line)
+  { id: 'NSR:StopPlace:4', name: 'Arendal stasjon' },
+
+  // Northern line
+  { id: 'NSR:StopPlace:318', name: 'Mosjøen stasjon' },
+  { id: 'NSR:StopPlace:317', name: 'Mo i Rana stasjon' },
+  { id: 'NSR:StopPlace:49', name: 'Fauske stasjon' },
 ];
 
 // GraphQL query with date/time filtering and full journey pattern
@@ -134,6 +160,40 @@ interface EstimatedCall {
 }
 
 /**
+ * Calculate Norwegian timezone offset for a given date
+ * Norway uses CET (UTC+1) in winter and CEST (UTC+2) in summer
+ */
+function getNorwegianTimezoneOffset(dateString: string): string {
+  // Parse the date in Norwegian timezone context
+  const date = new Date(dateString + 'T12:00:00'); // Use noon to avoid edge cases
+
+  // Get the timezone offset for Europe/Oslo
+  // This properly handles CET/CEST transitions
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Europe/Oslo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+
+  const osloDate = new Date(formatter.format(date));
+  const utcDate = new Date(date.toISOString());
+
+  // Calculate offset in hours
+  const offsetMs = osloDate.getTime() - utcDate.getTime();
+  const offsetHours = Math.round(offsetMs / (1000 * 60 * 60));
+
+  // Format as +01:00 or +02:00
+  const sign = offsetHours >= 0 ? '+' : '-';
+  const absOffset = Math.abs(offsetHours);
+  return `${sign}${String(absOffset).padStart(2, '0')}:00`;
+}
+
+/**
  * Lookup train by number and date - returns ALL departures
  *
  * Searches major stations for ALL departures of the train on the specified date
@@ -144,11 +204,12 @@ export async function lookupTrainByNumber(
   const { trainNumber, serviceDate } = params;
 
   // Convert serviceDate (YYYY-MM-DD) to start of day in Europe/Oslo timezone
-  // Use the date at midnight local time, not UTC
-  const startTime = `${serviceDate}T00:00:00+01:00`; // CET (Norway standard time)
+  // Automatically handles CET (winter, UTC+1) vs CEST (summer, UTC+2)
+  const offset = getNorwegianTimezoneOffset(serviceDate);
+  const startTime = `${serviceDate}T00:00:00${offset}`;
 
   console.log(`[TrainLookup] Searching for ALL departures of train ${trainNumber} on ${serviceDate}`);
-  console.log(`[TrainLookup] Using startTime: ${startTime}`);
+  console.log(`[TrainLookup] Using startTime: ${startTime} (offset: ${offset})`);
 
   const allDepartures: TrainLookupResult[] = [];
   const seenServiceJourneyIds = new Set<string>(); // Deduplicate by serviceJourneyId
