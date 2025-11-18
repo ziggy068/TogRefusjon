@@ -129,19 +129,22 @@ interface EstimatedCall {
 }
 
 /**
- * Lookup train by number and date
+ * Lookup train by number and date - returns ALL departures
  *
- * Searches major stations for the train on the specified date
+ * Searches major stations for ALL departures of the train on the specified date
  */
 export async function lookupTrainByNumber(
   params: TrainLookupParams
-): Promise<TrainLookupResult | null> {
+): Promise<TrainLookupResult[]> {
   const { trainNumber, serviceDate } = params;
 
   // Convert serviceDate (YYYY-MM-DD) to ISO 8601 timestamp at start of day (00:00 UTC)
   const startTime = `${serviceDate}T00:00:00Z`;
 
-  console.log(`[TrainLookup] Searching for train ${trainNumber} on ${serviceDate}`);
+  console.log(`[TrainLookup] Searching for ALL departures of train ${trainNumber} on ${serviceDate}`);
+
+  const allDepartures: TrainLookupResult[] = [];
+  const seenServiceJourneyIds = new Set<string>(); // Deduplicate by serviceJourneyId
 
   // Search through major stations
   for (const station of MAJOR_STATIONS) {
@@ -170,21 +173,19 @@ export async function lookupTrainByNumber(
 
       console.log(`[TrainLookup] Got ${estimatedCalls.length} departures from ${station.name}`);
 
-      // Debug: Log first 10 train numbers to see format
-      if (estimatedCalls.length > 0) {
-        const sampleCodes = estimatedCalls.slice(0, 10).map(call =>
-          call.serviceJourney?.line?.publicCode || 'NO_CODE'
-        );
-        console.log(`[TrainLookup] Sample publicCodes from ${station.name}:`, sampleCodes.join(', '));
-      }
-
-      // Find matching train by publicCode
-      const match = estimatedCalls.find(
+      // Find ALL matching trains by publicCode
+      const matches = estimatedCalls.filter(
         (call) => call.serviceJourney.line.publicCode.toUpperCase() === trainNumber.toUpperCase()
       );
 
-      if (match) {
-        console.log(`[TrainLookup] Found ${trainNumber} at ${station.name}!`);
+      console.log(`[TrainLookup] Found ${matches.length} departures of ${trainNumber} at ${station.name}`);
+
+      for (const match of matches) {
+        // Skip if we've already seen this serviceJourney (avoid duplicates)
+        if (seenServiceJourneyIds.has(match.serviceJourney.id)) {
+          continue;
+        }
+        seenServiceJourneyIds.add(match.serviceJourney.id);
 
         // Get full journey route from estimatedCalls
         const journeyCalls = match.serviceJourney.estimatedCalls || [];
@@ -207,9 +208,9 @@ export async function lookupTrainByNumber(
             arrivalTime: call.aimedArrivalTime,
           }));
 
-          console.log(`[TrainLookup] Full route: ${fromStationName} → ${toStationName} (${journeyCalls.length} stops)`);
+          console.log(`[TrainLookup] Departure: ${fromStationName} → ${toStationName} at ${firstStop.aimedDepartureTime} (${journeyCalls.length} stops)`);
 
-          return {
+          allDepartures.push({
             fromStationName,
             fromStationId,
             toStationName,
@@ -220,24 +221,7 @@ export async function lookupTrainByNumber(
             lineName: match.serviceJourney.line.publicCode,
             allStops,
             raw: match,
-          };
-        } else {
-          // Fallback to old behavior if no estimatedCalls
-          console.warn(`[TrainLookup] No journey calls available, using fallback`);
-          const destination = match.destinationDisplay?.frontText || 'Ukjent';
-
-          return {
-            fromStationName: station.name,
-            fromStationId: station.id,
-            toStationName: destination,
-            toStationId: '',
-            plannedDepartureTime: match.aimedDepartureTime || match.expectedDepartureTime || '',
-            plannedArrivalTime: undefined,
-            serviceJourneyId: match.serviceJourney.id,
-            lineName: match.serviceJourney.line.publicCode,
-            allStops: [],
-            raw: match,
-          };
+          });
         }
       }
     } catch (error: any) {
@@ -246,6 +230,13 @@ export async function lookupTrainByNumber(
     }
   }
 
-  console.log(`[TrainLookup] No train ${trainNumber} found on ${serviceDate}`);
-  return null;
+  // Sort by departure time
+  allDepartures.sort((a, b) => {
+    const timeA = new Date(a.plannedDepartureTime).getTime();
+    const timeB = new Date(b.plannedDepartureTime).getTime();
+    return timeA - timeB;
+  });
+
+  console.log(`[TrainLookup] Found ${allDepartures.length} total departures of ${trainNumber} on ${serviceDate}`);
+  return allDepartures;
 }

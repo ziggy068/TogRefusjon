@@ -34,8 +34,9 @@ function AddTicketPageContent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLookingUp, setIsLookingUp] = useState(false);
 
-  // Train lookup result with all stops
-  const [lookupResult, setLookupResult] = useState<TrainLookupResult | null>(null);
+  // Train lookup results - all departures
+  const [allDepartures, setAllDepartures] = useState<TrainLookupResult[]>([]);
+  const [selectedDeparture, setSelectedDeparture] = useState<TrainLookupResult | null>(null);
   const [selectedFromIndex, setSelectedFromIndex] = useState<number | null>(null);
   const [selectedToIndex, setSelectedToIndex] = useState<number | null>(null);
 
@@ -101,12 +102,12 @@ function AddTicketPageContent() {
     setIsLookingUp(true);
 
     try {
-      const result = await lookupTrainByNumber({
+      const departures = await lookupTrainByNumber({
         trainNumber: formData.trainNumber,
         serviceDate: formData.departureDate,
       });
 
-      if (!result) {
+      if (departures.length === 0) {
         console.log(`[Lookup] No train found for ${formData.trainNumber} on ${formData.departureDate}`);
         showToast(
           `Fant ikke tog ${formData.trainNumber} på ${formData.departureDate}. Du kan fylle inn feltene manuelt.`,
@@ -115,11 +116,11 @@ function AddTicketPageContent() {
         return;
       }
 
-      console.log("[Lookup] Found train:", result.fromStationName, "→", result.toStationName);
-      console.log(`[Lookup] ${result.allStops.length} stops on route`);
+      console.log(`[Lookup] Found ${departures.length} departures of ${formData.trainNumber}`);
 
-      // Save lookup result and show dropdown
-      setLookupResult(result);
+      // Save all departures and reset selection
+      setAllDepartures(departures);
+      setSelectedDeparture(null);
       setSelectedFromIndex(null);
       setSelectedToIndex(null);
 
@@ -128,7 +129,7 @@ function AddTicketPageContent() {
         setFormData((prev) => ({ ...prev, operator: inferOperator(formData.trainNumber) }));
       }
 
-      showToast(`Fant tog med ${result.allStops.length} stopp. Velg fra- og til-stasjon nedenfor.`, "success");
+      showToast(`Fant ${departures.length} avgang${departures.length > 1 ? 'er' : ''}. Velg en avgang nedenfor.`, "success");
     } catch (error: any) {
       console.error("[Lookup] Error fetching train data:", error);
       showToast(
@@ -140,11 +141,19 @@ function AddTicketPageContent() {
     }
   };
 
+  // Handle departure selection (from list of all departures)
+  const handleDepartureSelect = (departure: TrainLookupResult) => {
+    setSelectedDeparture(departure);
+    setSelectedFromIndex(null);
+    setSelectedToIndex(null);
+    console.log(`[DepartureSelect] Selected: ${departure.fromStationName} → ${departure.toStationName} at ${departure.plannedDepartureTime}`);
+  };
+
   // Handle from-station selection from dropdown
   const handleFromStationSelect = (index: number) => {
-    if (!lookupResult) return;
+    if (!selectedDeparture) return;
 
-    const stop = lookupResult.allStops[index];
+    const stop = selectedDeparture.allStops[index];
     setSelectedFromIndex(index);
 
     // Auto-fill fromStation and departureTime
@@ -160,9 +169,9 @@ function AddTicketPageContent() {
 
   // Handle to-station selection from dropdown
   const handleToStationSelect = (index: number) => {
-    if (!lookupResult) return;
+    if (!selectedDeparture) return;
 
-    const stop = lookupResult.allStops[index];
+    const stop = selectedDeparture.allStops[index];
     setSelectedToIndex(index);
 
     // Auto-fill toStation and arrivalTime
@@ -377,12 +386,60 @@ function AddTicketPageContent() {
               </div>
             </div>
 
-            {/* Dropdown for selecting stops from train route */}
-            {lookupResult && lookupResult.allStops.length > 0 && (
-              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
-                <h3 className="text-sm font-semibold text-emerald-900 mb-3">
-                  Velg stopp fra {lookupResult.fromStationName} til {lookupResult.toStationName}
+            {/* List of all departures found */}
+            {allDepartures.length > 0 && !selectedDeparture && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h3 className="text-sm font-semibold text-blue-900 mb-3">
+                  Fant {allDepartures.length} avgang{allDepartures.length > 1 ? 'er' : ''} - velg en:
                 </h3>
+                <div className="space-y-2">
+                  {allDepartures.map((departure, idx) => {
+                    const depTime = new Date(departure.plannedDepartureTime).toLocaleTimeString("no", { hour: "2-digit", minute: "2-digit" });
+                    const arrTime = departure.plannedArrivalTime ? new Date(departure.plannedArrivalTime).toLocaleTimeString("no", { hour: "2-digit", minute: "2-digit" }) : "";
+
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => handleDepartureSelect(departure)}
+                        className="w-full text-left px-4 py-3 border-2 border-blue-300 rounded-lg hover:bg-blue-100 hover:border-blue-400 transition flex items-center justify-between group"
+                      >
+                        <div>
+                          <div className="font-semibold text-blue-900">
+                            {departure.fromStationName} → {departure.toStationName}
+                          </div>
+                          <div className="text-sm text-blue-700">
+                            Avgang: {depTime}{arrTime && ` • Ankomst: ${arrTime}`}
+                          </div>
+                          <div className="text-xs text-blue-600 mt-1">
+                            {departure.allStops.length} stopp
+                          </div>
+                        </div>
+                        <div className="text-blue-400 group-hover:text-blue-600 transition text-xl">
+                          →
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Dropdown for selecting stops from selected departure */}
+            {selectedDeparture && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-emerald-900">
+                    Velg stopp fra {selectedDeparture.fromStationName} til {selectedDeparture.toStationName}
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDeparture(null)}
+                    className="text-xs text-emerald-700 hover:text-emerald-900 underline"
+                  >
+                    Velg annen avgang
+                  </button>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* From station dropdown */}
                   <div>
@@ -395,7 +452,7 @@ function AddTicketPageContent() {
                       className="w-full px-3 py-2 border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
                     >
                       <option value="">-- Velg fra-stasjon --</option>
-                      {lookupResult.allStops.map((stop, idx) => (
+                      {selectedDeparture.allStops.map((stop, idx) => (
                         <option key={idx} value={idx}>
                           {stop.stationName}
                           {stop.departureTime && ` (avg. ${new Date(stop.departureTime).toLocaleTimeString("no", { hour: "2-digit", minute: "2-digit" })})`}
@@ -415,7 +472,7 @@ function AddTicketPageContent() {
                       className="w-full px-3 py-2 border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
                     >
                       <option value="">-- Velg til-stasjon --</option>
-                      {lookupResult.allStops.map((stop, idx) => (
+                      {selectedDeparture.allStops.map((stop, idx) => (
                         <option key={idx} value={idx}>
                           {stop.stationName}
                           {stop.arrivalTime && ` (ank. ${new Date(stop.arrivalTime).toLocaleTimeString("no", { hour: "2-digit", minute: "2-digit" })})`}
@@ -431,7 +488,7 @@ function AddTicketPageContent() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-900 mb-2">
-                  Fra-stasjon {lookupResult ? "(eller juster manuelt)" : "(fylles ved oppslag)"}
+                  Fra-stasjon {selectedDeparture ? "(eller juster manuelt)" : "(fylles ved oppslag)"}
                 </label>
                 <input
                   type="text"
@@ -444,7 +501,7 @@ function AddTicketPageContent() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-900 mb-2">
-                  Til-stasjon {lookupResult ? "(eller juster manuelt)" : "(fylles ved oppslag)"}
+                  Til-stasjon {selectedDeparture ? "(eller juster manuelt)" : "(fylles ved oppslag)"}
                 </label>
                 <input
                   type="text"
