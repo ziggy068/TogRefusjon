@@ -3,6 +3,10 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import jsQR from "jsqr";
 import { parseTicket, createTicketDraft } from "@/lib/ticketParser";
+import { normalizeFromQR } from "@/lib/tickets/normalizeTicket";
+import { saveTicketForUser } from "@/lib/tickets/firestore";
+import { lookupTrainByNumber } from "@/lib/entur/trainLookup";
+import { auth } from "@/lib/firebase";
 import { useToast } from "@/components/ui/Toast";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
@@ -134,36 +138,87 @@ function ScanPageContent() {
   };
 
   // Handle detected QR code
-  const handleQRDetected = (data: string) => {
+  const handleQRDetected = async (data: string) => {
     console.log("QR detected:", data);
+
+    const user = auth.currentUser;
+    if (!user) {
+      showToast("Du må være innlogget for å lagre billetter", "error");
+      stopCamera();
+      router.push("/login");
+      return;
+    }
 
     const parsed = parseTicket(data);
 
     if (parsed) {
-      // Successfully parsed
-      const draft = createTicketDraft(parsed);
-      localStorage.setItem("ticketDraft", JSON.stringify(draft));
+      try {
+        // TR-IM-303: Optional train lookup as fallback if stations are missing
+        let enrichedParsed = { ...parsed };
 
-      showToast("QR-kode funnet! Skjema er forhåndsutfylt.", "success");
+        // Check if we're missing critical station info
+        const missingStations = !parsed.from || !parsed.to || parsed.from === "Ukjent" || parsed.to === "Ukjent";
 
-      // Stop camera and redirect
-      stopCamera();
-      setTimeout(() => {
-        router.push("/billetter/upload");
-      }, 1000);
+        if (missingStations && parsed.trainNo && parsed.date) {
+          console.log("[Scan] Missing station data, attempting Entur lookup...");
+          try {
+            const lookupResult = await lookupTrainByNumber({
+              trainNumber: parsed.trainNo,
+              serviceDate: parsed.date,
+            });
+
+            if (lookupResult) {
+              console.log("[Scan] Entur lookup successful, enriching ticket data");
+              enrichedParsed.from = lookupResult.fromStationName;
+              enrichedParsed.to = lookupResult.toStationName;
+
+              // Optionally update time if missing
+              if (!parsed.time || parsed.time === "00:00") {
+                const depDateTime = new Date(lookupResult.plannedDepartureTime);
+                enrichedParsed.time = depDateTime.toTimeString().slice(0, 5);
+              }
+            } else {
+              console.log("[Scan] Entur lookup returned no results, using QR data as-is");
+            }
+          } catch (lookupError: any) {
+            // Don't fail the whole flow if lookup fails - log and continue
+            console.warn("[Scan] Entur lookup failed, continuing with QR data:", lookupError.message);
+          }
+        }
+
+        // Successfully parsed - save to Firestore using new helpers
+        const ticketInput = normalizeFromQR(enrichedParsed, user.uid);
+        const docRef = await saveTicketForUser(user.uid, ticketInput);
+
+        console.log("[Scan] QR ticket saved:", docRef.id);
+
+        showToast("✅ Billett lagret fra QR-kode!", "success");
+
+        // Stop camera and redirect to tickets list
+        stopCamera();
+        setTimeout(() => {
+          router.push("/billetter");
+        }, 1000);
+      } catch (error: any) {
+        console.error("[Scan] Error saving QR ticket:", error);
+        showToast(
+          `Kunne ikke lagre billett: ${error.message}`,
+          "error"
+        );
+      }
     } else {
-      // Could not parse - show raw data
-      showToast("Ukjent QR-format. Viser rådata.", "info");
+      // Could not parse - save raw data as draft for manual editing
+      showToast("Ukjent QR-format. Åpner manuell input.", "info");
       localStorage.setItem(
         "ticketDraft",
         JSON.stringify({
-          beskrivelse: `QR-data: ${data}`,
+          beskrivelse: `QR-data (ukjent format): ${data}`,
         })
       );
 
       stopCamera();
       setTimeout(() => {
-        router.push("/billetter/upload");
+        router.push("/billetter/add");
       }, 1000);
     }
   };
@@ -264,10 +319,10 @@ function ScanPageContent() {
           )}
 
           <Button
-            onClick={() => router.push("/billetter/upload")}
+            onClick={() => router.push("/billetter/add")}
             variant="secondary"
           >
-            Manuell opplasting
+            Manuell input
           </Button>
         </div>
 

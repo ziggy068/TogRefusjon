@@ -51,7 +51,8 @@
       "Bash(del /F /Q \"D:\\TogRefusjon\\frontend\\.next\" 2)",
       "Bash(timeout /t 2)",
       "Bash(netstat:*)",
-      "Bash(findstr:*)"
+      "Bash(findstr:*)",
+      "Bash(timeout /t 5 /nobreak)"
     ],
     "deny": [],
     "ask": []
