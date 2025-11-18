@@ -467,7 +467,7 @@ function AddTicketPageContent() {
             </div>
 
             {/* Train Lookup Button (TR-IM-303) */
-              <div className="bg-primary-50 border border-primary-200 rounded-lg p-4">
+            <div className="bg-primary-50 border border-primary-200 rounded-lg p-4">
               <div className="flex items-start gap-3">
                 <span className="text-xl">=</span>
                 <div className="flex-1">
@@ -490,7 +490,7 @@ function AddTicketPageContent() {
               </div>
             </div>
 
-            {/* Arrival Date & Time (optional */}
+            {/* Arrival Date & Time (optional) */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-900 mb-2">
