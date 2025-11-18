@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { auth } from "@/lib/firebase";
 import { normalizeFromManual } from "@/lib/tickets/normalizeTicket";
 import { saveTicketForUser } from "@/lib/tickets/firestore";
-import { lookupTrainByNumber } from "@/lib/entur/trainLookup";
+import { lookupTrainByNumber, TrainLookupResult } from "@/lib/entur/trainLookup";
 import { useToast } from "@/components/ui/Toast";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
@@ -33,6 +33,11 @@ function AddTicketPageContent() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLookingUp, setIsLookingUp] = useState(false);
+
+  // Train lookup result with all stops
+  const [lookupResult, setLookupResult] = useState<TrainLookupResult | null>(null);
+  const [selectedFromIndex, setSelectedFromIndex] = useState<number | null>(null);
+  const [selectedToIndex, setSelectedToIndex] = useState<number | null>(null);
 
   // Common Norwegian operators
   const commonOperators = ["Vy", "SJ Norge", "Go-Ahead Nordic"];
@@ -69,7 +74,7 @@ function AddTicketPageContent() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  // Handle train lookup (TR-IM-303, TR-IM-304)
+  // Handle train lookup (TR-IM-303, TR-IM-304 + dropdown)
   const handleTrainLookup = async () => {
     // Validate required fields for lookup
     if (!formData.trainNumber) {
@@ -80,6 +85,17 @@ function AddTicketPageContent() {
     if (!formData.departureDate) {
       showToast("Vennligst fyll inn avgangsdato først", "error");
       return;
+    }
+
+    // Check if fields are already filled - ask for confirmation
+    const hasExistingData = formData.fromStation || formData.toStation || formData.departureTime;
+    if (hasExistingData) {
+      const confirmed = window.confirm(
+        "Feltene er allerede fylt inn. Vil du overskrive med nye data fra togsøket?"
+      );
+      if (!confirmed) {
+        return;
+      }
     }
 
     setIsLookingUp(true);
@@ -100,52 +116,19 @@ function AddTicketPageContent() {
       }
 
       console.log("[Lookup] Found train:", result.fromStationName, "→", result.toStationName);
+      console.log(`[Lookup] ${result.allStops.length} stops on route`);
 
-      // Extract date and time from ISO timestamps
-      const depDateTime = new Date(result.plannedDepartureTime);
-      const depDate = depDateTime.toISOString().split("T")[0]; // YYYY-MM-DD
-      const depTime = depDateTime.toTimeString().slice(0, 5); // HH:MM
+      // Save lookup result and show dropdown
+      setLookupResult(result);
+      setSelectedFromIndex(null);
+      setSelectedToIndex(null);
 
-      let arrDate = "";
-      let arrTime = "";
-      if (result.plannedArrivalTime) {
-        const arrDateTime = new Date(result.plannedArrivalTime);
-        arrDate = arrDateTime.toISOString().split("T")[0];
-        arrTime = arrDateTime.toTimeString().slice(0, 5);
-      }
-
-      // Only auto-fill empty fields (don't overwrite user input)
-      const updates: Partial<typeof formData> = {};
-
-      // Infer and set operator if not already set
+      // Auto-fill operator
       if (!formData.operator) {
-        updates.operator = inferOperator(formData.trainNumber);
+        setFormData((prev) => ({ ...prev, operator: inferOperator(formData.trainNumber) }));
       }
 
-      if (!formData.fromStation) {
-        updates.fromStation = result.fromStationName;
-      }
-
-      if (!formData.toStation) {
-        updates.toStation = result.toStationName;
-      }
-
-      if (!formData.departureTime) {
-        updates.departureDate = depDate;
-        updates.departureTime = depTime;
-      }
-
-      if (!formData.arrivalDate && arrDate) {
-        updates.arrivalDate = arrDate;
-      }
-
-      if (!formData.arrivalTime && arrTime) {
-        updates.arrivalTime = arrTime;
-      }
-
-      setFormData((prev) => ({ ...prev, ...updates }));
-
-      showToast(`Fant tog: ${result.fromStationName} → ${result.toStationName}`, "success");
+      showToast(`Fant tog med ${result.allStops.length} stopp. Velg fra- og til-stasjon nedenfor.`, "success");
     } catch (error: any) {
       console.error("[Lookup] Error fetching train data:", error);
       showToast(
@@ -155,6 +138,42 @@ function AddTicketPageContent() {
     } finally {
       setIsLookingUp(false);
     }
+  };
+
+  // Handle from-station selection from dropdown
+  const handleFromStationSelect = (index: number) => {
+    if (!lookupResult) return;
+
+    const stop = lookupResult.allStops[index];
+    setSelectedFromIndex(index);
+
+    // Auto-fill fromStation and departureTime
+    setFormData((prev) => ({
+      ...prev,
+      fromStation: stop.stationName,
+      departureDate: stop.departureTime ? stop.departureTime.split("T")[0] : prev.departureDate,
+      departureTime: stop.departureTime ? new Date(stop.departureTime).toTimeString().slice(0, 5) : "",
+    }));
+
+    console.log(`[StationSelect] From: ${stop.stationName} (index ${index})`);
+  };
+
+  // Handle to-station selection from dropdown
+  const handleToStationSelect = (index: number) => {
+    if (!lookupResult) return;
+
+    const stop = lookupResult.allStops[index];
+    setSelectedToIndex(index);
+
+    // Auto-fill toStation and arrivalTime
+    setFormData((prev) => ({
+      ...prev,
+      toStation: stop.stationName,
+      arrivalDate: stop.arrivalTime ? stop.arrivalTime.split("T")[0] : "",
+      arrivalTime: stop.arrivalTime ? new Date(stop.arrivalTime).toTimeString().slice(0, 5) : "",
+    }));
+
+    console.log(`[StationSelect] To: ${stop.stationName} (index ${index})`);
   };
 
   // Handle form submission (TR-IM-304)
@@ -358,11 +377,61 @@ function AddTicketPageContent() {
               </div>
             </div>
 
-            {/* From & To Stations */}
+            {/* Dropdown for selecting stops from train route */}
+            {lookupResult && lookupResult.allStops.length > 0 && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+                <h3 className="text-sm font-semibold text-emerald-900 mb-3">
+                  Velg stopp fra {lookupResult.fromStationName} til {lookupResult.toStationName}
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* From station dropdown */}
+                  <div>
+                    <label className="block text-xs font-medium text-emerald-900 mb-2">
+                      Fra stasjon
+                    </label>
+                    <select
+                      value={selectedFromIndex ?? ""}
+                      onChange={(e) => handleFromStationSelect(Number(e.target.value))}
+                      className="w-full px-3 py-2 border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
+                    >
+                      <option value="">-- Velg fra-stasjon --</option>
+                      {lookupResult.allStops.map((stop, idx) => (
+                        <option key={idx} value={idx}>
+                          {stop.stationName}
+                          {stop.departureTime && ` (avg. ${new Date(stop.departureTime).toLocaleTimeString("no", { hour: "2-digit", minute: "2-digit" })})`}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* To station dropdown */}
+                  <div>
+                    <label className="block text-xs font-medium text-emerald-900 mb-2">
+                      Til stasjon
+                    </label>
+                    <select
+                      value={selectedToIndex ?? ""}
+                      onChange={(e) => handleToStationSelect(Number(e.target.value))}
+                      className="w-full px-3 py-2 border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
+                    >
+                      <option value="">-- Velg til-stasjon --</option>
+                      {lookupResult.allStops.map((stop, idx) => (
+                        <option key={idx} value={idx}>
+                          {stop.stationName}
+                          {stop.arrivalTime && ` (ank. ${new Date(stop.arrivalTime).toLocaleTimeString("no", { hour: "2-digit", minute: "2-digit" })})`}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* From & To Stations (manual input fallback) */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-900 mb-2">
-                  Fra-stasjon (fylles ved oppslag)
+                  Fra-stasjon {lookupResult ? "(eller juster manuelt)" : "(fylles ved oppslag)"}
                 </label>
                 <input
                   type="text"
@@ -375,7 +444,7 @@ function AddTicketPageContent() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-900 mb-2">
-                  Til-stasjon (fylles ved oppslag)
+                  Til-stasjon {lookupResult ? "(eller juster manuelt)" : "(fylles ved oppslag)"}
                 </label>
                 <input
                   type="text"

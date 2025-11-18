@@ -6,6 +6,13 @@
 
 import { enturQuery } from '../enturClient';
 
+export interface TrainStop {
+  stationName: string;
+  stationId: string;
+  departureTime?: string;
+  arrivalTime?: string;
+}
+
 export interface TrainLookupResult {
   fromStationName: string;
   fromStationId: string;
@@ -15,6 +22,7 @@ export interface TrainLookupResult {
   plannedArrivalTime?: string;
   serviceJourneyId?: string;
   lineName?: string;
+  allStops: TrainStop[]; // All stops on the route
   raw?: any;
 }
 
@@ -34,7 +42,7 @@ const MAJOR_STATIONS = [
   { id: 'NSR:StopPlace:59', name: 'Lillehammer stasjon' },
 ];
 
-// GraphQL query with date/time filtering
+// GraphQL query with date/time filtering and full journey pattern
 const DEPARTURES_WITH_DATE_QUERY = `
   query GetDeparturesWithDate($stopPlaceId: String!, $startTime: DateTime!, $numberOfDepartures: Int!) {
     stopPlace(id: $stopPlaceId) {
@@ -52,6 +60,24 @@ const DEPARTURES_WITH_DATE_QUERY = `
             id
             publicCode
             name
+          }
+          journeyPattern {
+            pointsOnLink {
+              points
+            }
+          }
+          estimatedCalls {
+            quay {
+              stopPlace {
+                id
+                name
+              }
+            }
+            aimedDepartureTime
+            aimedArrivalTime
+            destinationDisplay {
+              frontText
+            }
           }
         }
         destinationDisplay {
@@ -79,6 +105,19 @@ interface EstimatedCall {
       publicCode: string;
       name?: string;
     };
+    estimatedCalls?: Array<{
+      quay?: {
+        stopPlace?: {
+          id: string;
+          name: string;
+        };
+      };
+      aimedDepartureTime?: string;
+      aimedArrivalTime?: string;
+      destinationDisplay?: {
+        frontText?: string;
+      };
+    }>;
   };
   destinationDisplay?: {
     frontText?: string;
@@ -147,20 +186,59 @@ export async function lookupTrainByNumber(
       if (match) {
         console.log(`[TrainLookup] Found ${trainNumber} at ${station.name}!`);
 
-        // Get destination from destinationDisplay
-        const destination = match.destinationDisplay?.frontText || 'Ukjent';
+        // Get full journey route from estimatedCalls
+        const journeyCalls = match.serviceJourney.estimatedCalls || [];
 
-        return {
-          fromStationName: station.name,
-          fromStationId: station.id,
-          toStationName: destination,
-          toStationId: '', // Not available from departure data
-          plannedDepartureTime: match.aimedDepartureTime || match.expectedDepartureTime || '',
-          plannedArrivalTime: undefined, // Not available from departure data
-          serviceJourneyId: match.serviceJourney.id,
-          lineName: match.serviceJourney.line.publicCode,
-          raw: match,
-        };
+        if (journeyCalls.length > 0) {
+          // First stop = origin, last stop = destination
+          const firstStop = journeyCalls[0];
+          const lastStop = journeyCalls[journeyCalls.length - 1];
+
+          const fromStationName = firstStop.quay?.stopPlace?.name || 'Ukjent';
+          const fromStationId = firstStop.quay?.stopPlace?.id || '';
+          const toStationName = lastStop.quay?.stopPlace?.name || 'Ukjent';
+          const toStationId = lastStop.quay?.stopPlace?.id || '';
+
+          // Build allStops array
+          const allStops: TrainStop[] = journeyCalls.map(call => ({
+            stationName: call.quay?.stopPlace?.name || 'Ukjent',
+            stationId: call.quay?.stopPlace?.id || '',
+            departureTime: call.aimedDepartureTime,
+            arrivalTime: call.aimedArrivalTime,
+          }));
+
+          console.log(`[TrainLookup] Full route: ${fromStationName} → ${toStationName} (${journeyCalls.length} stops)`);
+
+          return {
+            fromStationName,
+            fromStationId,
+            toStationName,
+            toStationId,
+            plannedDepartureTime: firstStop.aimedDepartureTime || '',
+            plannedArrivalTime: lastStop.aimedArrivalTime || '',
+            serviceJourneyId: match.serviceJourney.id,
+            lineName: match.serviceJourney.line.publicCode,
+            allStops,
+            raw: match,
+          };
+        } else {
+          // Fallback to old behavior if no estimatedCalls
+          console.warn(`[TrainLookup] No journey calls available, using fallback`);
+          const destination = match.destinationDisplay?.frontText || 'Ukjent';
+
+          return {
+            fromStationName: station.name,
+            fromStationId: station.id,
+            toStationName: destination,
+            toStationId: '',
+            plannedDepartureTime: match.aimedDepartureTime || match.expectedDepartureTime || '',
+            plannedArrivalTime: undefined,
+            serviceJourneyId: match.serviceJourney.id,
+            lineName: match.serviceJourney.line.publicCode,
+            allStops: [],
+            raw: match,
+          };
+        }
       }
     } catch (error: any) {
       console.warn(`[TrainLookup] Error at ${station.name}:`, error.message);
