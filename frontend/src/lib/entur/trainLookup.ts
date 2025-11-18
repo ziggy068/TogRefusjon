@@ -33,6 +33,7 @@ export interface TrainLookupParams {
 }
 
 // Major Norwegian train stations to search from
+// Expanded list to catch more train departures
 const MAJOR_STATIONS = [
   { id: 'NSR:StopPlace:548', name: 'Oslo S' },
   { id: 'NSR:StopPlace:337', name: 'Trondheim S' },
@@ -40,6 +41,10 @@ const MAJOR_STATIONS = [
   { id: 'NSR:StopPlace:595', name: 'Stavanger stasjon' },
   { id: 'NSR:StopPlace:551', name: 'Drammen stasjon' },
   { id: 'NSR:StopPlace:59', name: 'Lillehammer stasjon' },
+  { id: 'NSR:StopPlace:552', name: 'Hamar stasjon' },
+  { id: 'NSR:StopPlace:550', name: 'Eidsvoll stasjon' },
+  { id: 'NSR:StopPlace:360', name: 'Kristiansand stasjon' },
+  { id: 'NSR:StopPlace:109', name: 'Bodø stasjon' },
 ];
 
 // GraphQL query with date/time filtering and full journey pattern
@@ -138,10 +143,12 @@ export async function lookupTrainByNumber(
 ): Promise<TrainLookupResult[]> {
   const { trainNumber, serviceDate } = params;
 
-  // Convert serviceDate (YYYY-MM-DD) to ISO 8601 timestamp at start of day (00:00 UTC)
-  const startTime = `${serviceDate}T00:00:00Z`;
+  // Convert serviceDate (YYYY-MM-DD) to start of day in Europe/Oslo timezone
+  // Use the date at midnight local time, not UTC
+  const startTime = `${serviceDate}T00:00:00+01:00`; // CET (Norway standard time)
 
   console.log(`[TrainLookup] Searching for ALL departures of train ${trainNumber} on ${serviceDate}`);
+  console.log(`[TrainLookup] Using startTime: ${startTime}`);
 
   const allDepartures: TrainLookupResult[] = [];
   const seenServiceJourneyIds = new Set<string>(); // Deduplicate by serviceJourneyId
@@ -161,7 +168,7 @@ export async function lookupTrainByNumber(
       }>(DEPARTURES_WITH_DATE_QUERY, {
         stopPlaceId: station.id,
         startTime,
-        numberOfDepartures: 200, // Get more departures for a full day
+        numberOfDepartures: 500, // Increased to catch all departures of a train number
       });
 
       if (!response.stopPlace) {
@@ -179,6 +186,12 @@ export async function lookupTrainByNumber(
       );
 
       console.log(`[TrainLookup] Found ${matches.length} departures of ${trainNumber} at ${station.name}`);
+
+      if (matches.length > 0) {
+        // Log all unique serviceJourneyIds for debugging
+        const journeyIds = matches.map(m => m.serviceJourney.id);
+        console.log(`[TrainLookup] ServiceJourney IDs at ${station.name}:`, journeyIds);
+      }
 
       for (const match of matches) {
         // Skip if we've already seen this serviceJourney (avoid duplicates)
