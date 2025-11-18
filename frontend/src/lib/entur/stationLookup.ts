@@ -30,47 +30,48 @@ export async function searchStations(searchTerm: string): Promise<StationSuggest
     return [];
   }
 
-  const STATION_SEARCH_QUERY = `
-    query SearchStations($searchTerm: String!) {
-      stopPlaces(name: $searchTerm) {
-        id
-        name
-        transportMode
-        ... on StopPlace {
-          locality {
-            name
-          }
-        }
-      }
-    }
-  `;
+  // Use Geocoder API for autocomplete instead of JourneyPlanner
+  const GEOCODER_URL = 'https://api.entur.io/geocoder/v1/autocomplete';
 
   try {
-    const response = await enturQuery<{
-      stopPlaces: Array<{
-        id: string;
-        name: string;
-        transportMode?: string[];
-        locality?: {
-          name?: string;
-        };
-      }>;
-    }>(STATION_SEARCH_QUERY, {
-      searchTerm: searchTerm.trim(),
+    const params = new URLSearchParams({
+      text: searchTerm.trim(),
+      size: '10',
+      layers: 'venue', // venue = stations/stops
+      'boundary.country': 'NOR',
     });
 
-    // Filter to only rail stations
-    const railStations = response.stopPlaces.filter(
-      (station) =>
-        station.transportMode?.includes('rail') ||
-        station.name.toLowerCase().includes('stasjon')
-    );
+    const response = await fetch(`${GEOCODER_URL}?${params}`, {
+      headers: {
+        'ET-Client-Name': 'togrefusjon-webapp',
+      },
+    });
 
-    return railStations.map((station) => ({
-      id: station.id,
-      name: station.name,
-      locality: station.locality?.name,
-    }));
+    if (!response.ok) {
+      throw new Error(`Geocoder API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const features = data.features || [];
+
+    // Filter to only rail stations and convert to our format
+    const railStations = features
+      .filter((feature: any) => {
+        const name = feature.properties?.name?.toLowerCase() || '';
+        const category = feature.properties?.category || [];
+        return (
+          name.includes('stasjon') ||
+          name.includes('station') ||
+          category.includes('railStation')
+        );
+      })
+      .map((feature: any) => ({
+        id: feature.properties?.id || '',
+        name: feature.properties?.name || '',
+        locality: feature.properties?.locality || feature.properties?.county,
+      }));
+
+    return railStations;
   } catch (error: any) {
     console.error('[StationSearch] Error searching stations:', error);
     return [];
