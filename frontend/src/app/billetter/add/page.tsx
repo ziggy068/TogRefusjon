@@ -119,7 +119,11 @@ function AddTicketPageContent() {
 
     return departure.allStops
       .slice(fromIndex + 1)
-      .filter(stop => stop.stationName && stop.stationName !== 'Ukjent')
+      .filter(stop =>
+        stop.stationName &&
+        stop.stationName !== 'Ukjent' &&
+        stop.stationName !== fromStationName  // Never allow same station as from-station
+      )
       .map(stop => ({
         name: stop.stationName,
         arrivalTime: stop.arrivalTime || ''
