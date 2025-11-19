@@ -142,6 +142,18 @@ export default function RulesTestPage() {
                       {selectedTest.delay.status}
                     </span>
                   </p>
+                  <p>
+                    <span className="font-medium">Journey kansellert:</span>{' '}
+                    <span
+                      className={
+                        selectedTest.journey.isCancelled
+                          ? 'text-red-600 font-semibold'
+                          : 'text-green-600'
+                      }
+                    >
+                      {selectedTest.journey.isCancelled ? 'Ja' : 'Nei'}
+                    </span>
+                  </p>
                   {selectedTest.delay.arrivalDelayMinutes !== undefined && (
                     <p>
                       <span className="font-medium">Forsinkelse:</span>{' '}

@@ -90,8 +90,13 @@ export function evaluateBaseCompensation(
   }
 
   // Rule 2: Cancelled journey
+  // NOTE (TR-RU-503): Cancelled journeys are now handled at the entry point (index.ts)
+  // with 100% refund regardless of force majeure. This code should never be reached
+  // for cancelled journeys, but is kept for backwards compatibility if called directly.
   if (delay.status === 'CANCELLED') {
-    // For cancelled journeys, compensation depends on force majeure
+    // DEPRECATED: This logic is incorrect per TR-RU-503
+    // Cancelled journeys should ALWAYS give 100% refund, not 50% or 0%
+    // See evaluateClaimFromDomainModels() in index.ts for correct implementation
     if (isForceMajeure || journey.forceMajeureFlag) {
       return {
         status: 'NOT_ELIGIBLE',
@@ -104,7 +109,7 @@ export function evaluateBaseCompensation(
         debug: {
           ...debug,
           forceMajeure: true,
-          appliedRule: 'CANCELLED_FORCE_MAJEURE',
+          appliedRule: 'CANCELLED_FORCE_MAJEURE_DEPRECATED',
         },
       };
     }
@@ -112,7 +117,7 @@ export function evaluateBaseCompensation(
     // Cancelled without force majeure → eligible for compensation
     return {
       status: 'ELIGIBLE',
-      compensationPct: config.tier2Pct, // Full compensation for cancellation
+      compensationPct: config.tier2Pct, // DEPRECATED: Should be 100% per TR-RU-503
       legalBasis: ['EU_2021_782_art19', 'NO_jernbane_passasjerrett'],
       reasons: [
         `Toget ble innstilt.`,
@@ -121,7 +126,7 @@ export function evaluateBaseCompensation(
       debug: {
         ...debug,
         forceMajeure: false,
-        appliedRule: 'CANCELLED_NO_FORCE_MAJEURE',
+        appliedRule: 'CANCELLED_NO_FORCE_MAJEURE_DEPRECATED',
       },
     };
   }

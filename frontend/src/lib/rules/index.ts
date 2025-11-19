@@ -56,6 +56,34 @@ export function evaluateClaimFromDomainModels(params: {
     lineCode: ticket.trainNumber, // Train number often indicates line (TODO: improve mapping)
   };
 
+  // TR-RU-503: Handle cancelled journeys (100% refund regardless of force majeure)
+  // Cancelled journeys should always give full refund - passenger paid for a service that was not delivered
+  if (journey.isCancelled) {
+    const forceMajeureUsed = ruleInput.isForceMajeure;
+
+    return {
+      status: 'ELIGIBLE',
+      compensationPct: 100,
+      legalBasis: [
+        'EU_2021_782_cancellation',
+        'NO_jernbane_passasjerrett_kansellering',
+      ],
+      reasons: [
+        'Toget ble innstilt. Du har krav på full refusjon av billettprisen.',
+        forceMajeureUsed
+          ? 'Force majeure påvirker ikke retten til refusjon for en reise som ikke ble gjennomført.'
+          : 'En kansellert reise gir alltid rett til full refusjon.',
+      ],
+      debug: {
+        evaluationSource: 'CANCELLED_JOURNEY',
+        isCancelled: true,
+        forceMajeureFlag: forceMajeureUsed,
+        compensationPct: 100,
+        reason: 'Cancelled journey always gives 100% refund',
+      },
+    };
+  }
+
   // Evaluate compensation using combined rules (EU base + Norwegian operator overrides)
   // This ensures we always give the BEST compensation available
   return evaluateWithOperatorRules(ruleInput);

@@ -173,7 +173,7 @@ export const testCase_ForceMajeure: {
 
 /**
  * Test Case 5: Cancelled journey (no force majeure)
- * Expected: ELIGIBLE, 50%
+ * Expected: ELIGIBLE, 100% (TR-RU-503)
  */
 export const testCase_Cancelled: {
   ticket: Ticket;
@@ -198,7 +198,7 @@ export const testCase_Cancelled: {
 
 /**
  * Test Case 6: Cancelled with force majeure
- * Expected: NOT_ELIGIBLE, 0%
+ * Expected: ELIGIBLE, 100% (TR-RU-503 - force majeure does NOT affect refund for cancelled journeys)
  */
 export const testCase_CancelledForceMajeure: {
   ticket: Ticket;
@@ -341,7 +341,7 @@ export const testCase_UnknownOp70Min: {
 };
 
 /**
- * All test cases (TR-RU-501 + TR-RU-502)
+ * All test cases (TR-RU-501 + TR-RU-502 + TR-RU-503)
  */
 export const ALL_TEST_CASES = [
   // Base EU rules (TR-RU-501)
@@ -349,8 +349,8 @@ export const ALL_TEST_CASES = [
   { name: 'Moderate delay (75 min, 25%)', ...testCase_ModerateDelay },
   { name: 'High delay (150 min, 50%)', ...testCase_HighDelay },
   { name: 'Force majeure (90 min, no comp)', ...testCase_ForceMajeure },
-  { name: 'Cancelled (50%)', ...testCase_Cancelled },
-  { name: 'Cancelled + force majeure (no comp)', ...testCase_CancelledForceMajeure },
+  { name: 'Cancelled (100%)', ...testCase_Cancelled },
+  { name: 'Cancelled + force majeure (100%)', ...testCase_CancelledForceMajeure },
   { name: 'Unknown delay', ...testCase_Unknown },
 
   // Operator overrides (TR-RU-502)
