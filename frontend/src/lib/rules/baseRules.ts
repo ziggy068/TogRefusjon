@@ -43,6 +43,14 @@ export const DEFAULT_COMPENSATION_CONFIG: CompensationConfig = {
  * This is the main entry point for the rule engine. It applies a
  * decision tree based on delay status, force majeure, and delay duration.
  *
+ * NOTE: This function implements the BASE rules that apply to all operators.
+ * For operator-specific overrides (TR-RU-502), create a wrapper function like:
+ *   evaluateWithOperatorOverrides(input) {
+ *     // 1. Check if operator-specific rules exist for input.operatorCode
+ *     // 2. If yes, apply operator rules (may call this function for base logic)
+ *     // 3. If no, fall back to evaluateBaseCompensation(input)
+ *   }
+ *
  * @param input - Consolidated input with ticket, journey, and delay data
  * @param config - Compensation thresholds (optional, uses defaults if not provided)
  * @returns Rule outcome with eligibility, percentage, and explanations
@@ -52,6 +60,10 @@ export function evaluateBaseCompensation(
   config: CompensationConfig = DEFAULT_COMPENSATION_CONFIG
 ): RuleOutcome {
   const { ticket, journey, delay, isForceMajeure, operatorCode } = input;
+
+  // TODO(TR-RU-502): Hook for operator-specific rules
+  // This is where operator-specific overrides will be checked before applying base rules.
+  // Example: if (operatorCode === 'VY') { return evaluateVyRules(input); }
 
   // Debug information
   const debug: RuleOutcome['debug'] = {
