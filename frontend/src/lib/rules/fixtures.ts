@@ -309,7 +309,71 @@ export const testCase_VyLongDistance70Min: {
 };
 
 /**
- * Test Case 10: Unknown operator 70 min delay (TR-RU-502)
+ * Test Case 10: SJ Norge regional 35 min delay (TR-RU-502)
+ * EU: 0% (below 60 min threshold)
+ * Operator: 50% (SJ gives 50% at 30 min)
+ * Expected: 50% (operator wins)
+ */
+export const testCase_SJRegional35Min: {
+  ticket: Ticket;
+  journey: JourneyInstance;
+  delay: DelayResult;
+} = {
+  ticket: { ...baseTicket, id: 'ticket-sj-regional', operator: 'SJ Norge', trainNumber: 'R11', priceNOK: 300 },
+  journey: {
+    ...baseJourney,
+    operator: 'SJ Norge',
+    trainNumber: 'R11',
+    delayMinutesArrival: 35,
+    actualArrivalUTC: timestampFromNow(35),
+  },
+  delay: {
+    journeyInstanceId: 'journey-sj-regional',
+    trainNumber: 'R11',
+    operator: 'SJ Norge',
+    plannedArrivalTime: timestampFromNow(0).toDate().toISOString(),
+    actualArrivalTime: timestampFromNow(35).toDate().toISOString(),
+    arrivalDelayMinutes: 35,
+    status: 'DELAYED',
+    checkedAt: new Date().toISOString(),
+    message: '35 minutes delay on SJ regional train',
+  },
+};
+
+/**
+ * Test Case 11: Go-Ahead regional 35 min delay (TR-RU-502)
+ * EU: 0% (below 60 min threshold)
+ * Operator: 50% (Go-Ahead gives 50% at 30 min)
+ * Expected: 50% (operator wins)
+ */
+export const testCase_GoAheadRegional35Min: {
+  ticket: Ticket;
+  journey: JourneyInstance;
+  delay: DelayResult;
+} = {
+  ticket: { ...baseTicket, id: 'ticket-goahead-regional', operator: 'Go-Ahead', trainNumber: 'R70', priceNOK: 280 },
+  journey: {
+    ...baseJourney,
+    operator: 'Go-Ahead',
+    trainNumber: 'R70',
+    delayMinutesArrival: 35,
+    actualArrivalUTC: timestampFromNow(35),
+  },
+  delay: {
+    journeyInstanceId: 'journey-goahead-regional',
+    trainNumber: 'R70',
+    operator: 'Go-Ahead',
+    plannedArrivalTime: timestampFromNow(0).toDate().toISOString(),
+    actualArrivalTime: timestampFromNow(35).toDate().toISOString(),
+    arrivalDelayMinutes: 35,
+    status: 'DELAYED',
+    checkedAt: new Date().toISOString(),
+    message: '35 minutes delay on Go-Ahead regional train',
+  },
+};
+
+/**
+ * Test Case 12: Unknown operator 70 min delay (TR-RU-502)
  * EU: 25% (60-119 min range)
  * Operator: N/A (no override)
  * Expected: 25% (EU base rules)
@@ -353,9 +417,11 @@ export const ALL_TEST_CASES = [
   { name: 'Cancelled + force majeure (100%)', ...testCase_CancelledForceMajeure },
   { name: 'Unknown delay', ...testCase_Unknown },
 
-  // Operator overrides (TR-RU-502)
+  // Operator overrides (TR-RU-502) - Norwegian operators
   { name: 'Vy regional 35 min (50% override)', ...testCase_VyRegional35Min },
   { name: 'Vy long-distance 70 min (50% override)', ...testCase_VyLongDistance70Min },
+  { name: 'SJ regional 35 min (50% override)', ...testCase_SJRegional35Min },
+  { name: 'Go-Ahead regional 35 min (50% override)', ...testCase_GoAheadRegional35Min },
   { name: 'Unknown operator 70 min (25% EU base)', ...testCase_UnknownOp70Min },
 ];
 
