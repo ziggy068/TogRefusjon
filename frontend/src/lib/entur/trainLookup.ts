@@ -43,12 +43,18 @@ const MAJOR_STATIONS = [
   { id: 'NSR:StopPlace:109', name: 'Bodø stasjon' },
   { id: 'NSR:StopPlace:360', name: 'Kristiansand stasjon' },
 
-  // Important intermediate stations on Oslo-Trondheim route
+  // Important intermediate stations on Oslo-Trondheim route (Dovrebanen)
   { id: 'NSR:StopPlace:552', name: 'Hamar stasjon' },
   { id: 'NSR:StopPlace:59', name: 'Lillehammer stasjon' },
   { id: 'NSR:StopPlace:550', name: 'Eidsvoll stasjon' },
   { id: 'NSR:StopPlace:56', name: 'Dombås stasjon' },
   { id: 'NSR:StopPlace:335', name: 'Oppdal stasjon' },
+
+  // Trønderbanen (Trondheim area)
+  { id: 'NSR:StopPlace:585', name: 'Stjørdal stasjon' }, // Changed from 41549 - that was bus station
+  { id: 'NSR:StopPlace:555', name: 'Steinkjer stasjon' },
+  { id: 'NSR:StopPlace:343', name: 'Levanger stasjon' },
+  { id: 'NSR:StopPlace:42722', name: 'Verdal stasjon' },
 
   // Oslo area and Vestfold line
   { id: 'NSR:StopPlace:551', name: 'Drammen stasjon' },
@@ -164,12 +170,11 @@ interface EstimatedCall {
  * Norway uses CET (UTC+1) in winter and CEST (UTC+2) in summer
  */
 function getNorwegianTimezoneOffset(dateString: string): string {
-  // Parse the date in Norwegian timezone context
-  const date = new Date(dateString + 'T12:00:00'); // Use noon to avoid edge cases
+  // Create a date at noon UTC for the given date
+  const utcDate = new Date(dateString + 'T12:00:00Z');
 
-  // Get the timezone offset for Europe/Oslo
-  // This properly handles CET/CEST transitions
-  const formatter = new Intl.DateTimeFormat('en-US', {
+  // Format this date in Europe/Oslo timezone
+  const osloFormatter = new Intl.DateTimeFormat('en-US', {
     timeZone: 'Europe/Oslo',
     year: 'numeric',
     month: '2-digit',
@@ -180,12 +185,30 @@ function getNorwegianTimezoneOffset(dateString: string): string {
     hour12: false,
   });
 
-  const osloDate = new Date(formatter.format(date));
-  const utcDate = new Date(date.toISOString());
+  const utcFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'UTC',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
 
-  // Calculate offset in hours
-  const offsetMs = osloDate.getTime() - utcDate.getTime();
-  const offsetHours = Math.round(offsetMs / (1000 * 60 * 60));
+  // Parse the formatted strings to extract hour differences
+  const osloParts = osloFormatter.formatToParts(utcDate);
+  const utcParts = utcFormatter.formatToParts(utcDate);
+
+  const osloHour = parseInt(osloParts.find(p => p.type === 'hour')?.value || '0');
+  const utcHour = parseInt(utcParts.find(p => p.type === 'hour')?.value || '0');
+
+  // Calculate offset (Oslo hour - UTC hour)
+  let offsetHours = osloHour - utcHour;
+
+  // Handle day wrap-around
+  if (offsetHours > 12) offsetHours -= 24;
+  if (offsetHours < -12) offsetHours += 24;
 
   // Format as +01:00 or +02:00
   const sign = offsetHours >= 0 ? '+' : '-';
@@ -240,6 +263,12 @@ export async function lookupTrainByNumber(
       const estimatedCalls = response.stopPlace.estimatedCalls || [];
 
       console.log(`[TrainLookup] Got ${estimatedCalls.length} departures from ${station.name}`);
+
+      // Log train numbers if this is Stjørdal or a station with few departures
+      if (station.name.includes('Stjørdal') || estimatedCalls.length < 20) {
+        const trainNumbers = estimatedCalls.map(call => call.serviceJourney.line.publicCode);
+        console.log(`[TrainLookup] Train numbers at ${station.name}:`, trainNumbers.join(', '));
+      }
 
       // Find ALL matching trains by publicCode
       const matches = estimatedCalls.filter(

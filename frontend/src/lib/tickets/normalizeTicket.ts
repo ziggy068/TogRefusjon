@@ -46,7 +46,7 @@ export function normalizeFromQR(
 export function normalizeFromManual(
   formData: {
     operator: string;
-    trainNumber: string;
+    trainNumber?: string; // Optional in manual mode
     departureDate: string; // YYYY-MM-DD
     departureTime: string; // HH:MM
     arrivalDate?: string; // YYYY-MM-DD (optional)
@@ -71,7 +71,7 @@ export function normalizeFromManual(
   return {
     userId,
     operator: formData.operator,
-    trainNumber: formData.trainNumber,
+    trainNumber: formData.trainNumber || "UNKNOWN", // Use placeholder if not provided
     departureTime: departureTimestamp,
     arrivalTime: arrivalTimestamp,
     fromStation: formData.fromStation,

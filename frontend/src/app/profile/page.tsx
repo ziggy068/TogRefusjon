@@ -182,7 +182,7 @@ function ProfilePageContent() {
       </Card>
 
       {/* Info card */}
-      <Card className="p-4 mt-4 bg-slate-50">
+      <Card className="p-4 mt-4 bg-slate-300">
         <div className="flex gap-3">
           <span className="text-xl">ℹ️</span>
           <div className="text-sm text-slate-600">

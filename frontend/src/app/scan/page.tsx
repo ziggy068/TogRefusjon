@@ -239,7 +239,7 @@ function ScanPageContent() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-50 py-8 px-4">
+    <div className="min-h-screen bg-slate-300 py-8 px-4">
       {ToastComponent}
 
       <div className="max-w-2xl mx-auto">
@@ -335,7 +335,7 @@ function ScanPageContent() {
         </div>
 
         {/* Help card */}
-        <Card className="p-4 mt-4 bg-slate-50">
+        <Card className="p-4 mt-4 bg-slate-300">
           <div className="flex gap-3">
             <span className="text-xl">💡</span>
             <div className="text-sm text-slate-600">

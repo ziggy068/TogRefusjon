@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { auth } from "@/lib/firebase";
 import { normalizeFromManual } from "@/lib/tickets/normalizeTicket";
@@ -46,14 +46,21 @@ function AddTicketPageContent() {
   const [selectedDeparture, setSelectedDeparture] = useState<TrainLookupResult | null>(null);
   const [availableToStations, setAvailableToStations] = useState<Array<{name: string, arrivalTime: string}>>([]);
 
-  // Station search mode (TR-IM-310)
-  const [searchMode, setSearchMode] = useState<'trainNumber' | 'station'>('trainNumber');
-  const [stationSearchTerm, setStationSearchTerm] = useState('');
-  const [stationSuggestions, setStationSuggestions] = useState<StationSuggestion[]>([]);
-  const [selectedStation, setSelectedStation] = useState<StationSuggestion | null>(null);
-  const [stationDepartures, setStationDepartures] = useState<Departure[]>([]);
-  const [isSearchingStations, setIsSearchingStations] = useState(false);
-  const [isLoadingDepartures, setIsLoadingDepartures] = useState(false);
+  // Manual station autocomplete
+  const [fromStationSuggestions, setFromStationSuggestions] = useState<StationSuggestion[]>([]);
+  const [toStationSuggestions, setToStationSuggestions] = useState<StationSuggestion[]>([]);
+  const [isSearchingFromStation, setIsSearchingFromStation] = useState(false);
+  const [isSearchingToStation, setIsSearchingToStation] = useState(false);
+  const [manualDepartures, setManualDepartures] = useState<Departure[]>([]);
+  const [isLoadingManualDepartures, setIsLoadingManualDepartures] = useState(false);
+  const [selectedFromStationId, setSelectedFromStationId] = useState<string>("");
+  const [lastFetchKey, setLastFetchKey] = useState<string>(""); // Track last fetch to prevent duplicates
+  const [departureFilter, setDepartureFilter] = useState<string>(""); // Filter departures by train number or destination
+  const [isManualMode, setIsManualMode] = useState(false); // Track if user is using manual station selection
+
+  // Keyboard navigation for autocomplete
+  const [highlightedFromIndex, setHighlightedFromIndex] = useState(-1);
+  const [highlightedToIndex, setHighlightedToIndex] = useState(-1);
 
   // Common Norwegian operators
   const commonOperators = ["Vy", "SJ Norge", "Go-Ahead Nordic"];
@@ -82,6 +89,25 @@ function AddTicketPageContent() {
     }
   };
 
+  // Normalize operator name from Entur API to match our dropdown values
+  const normalizeOperatorName = (enturOperator: string): string => {
+    const normalized = enturOperator.trim().toLowerCase();
+
+    // Map common variations to our dropdown values
+    if (normalized.includes('vy')) {
+      return 'Vy';
+    }
+    if (normalized.includes('sj')) {
+      return 'SJ Norge';
+    }
+    if (normalized.includes('go-ahead') || normalized.includes('go ahead')) {
+      return 'Go-Ahead Nordic';
+    }
+
+    // If no match, return the original (will show as "Annet")
+    return enturOperator;
+  };
+
   // Handle input change
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -103,8 +129,8 @@ function AddTicketPageContent() {
     return Array.from(stationSet).sort();
   };
 
-  // Helper: Get all departure times from a specific station
-  const getDeparturesFromStation = (departures: TrainLookupResult[], stationName: string) => {
+  // Helper: Get all departure times from a specific station (for automatic flow)
+  const getDepartureTimesFromStation = (departures: TrainLookupResult[], stationName: string) => {
     const result: Array<{time: string, departure: TrainLookupResult}> = [];
 
     departures.forEach(dep => {
@@ -174,22 +200,34 @@ function AddTicketPageContent() {
   const handleFromStationSelect = (stationName: string) => {
     setSelectedFromStation(stationName);
 
-    // Get available departure times from this station
-    const departureTimes = getDeparturesFromStation(allDepartures, stationName);
-    setAvailableDepartureTimes(departureTimes);
+    // Get all stations that appear AFTER this station in ANY departure
+    const toStationsSet = new Set<string>();
+    allDepartures.forEach(dep => {
+      const fromIndex = dep.allStops.findIndex(stop => stop.stationName === stationName);
+      if (fromIndex !== -1) {
+        dep.allStops.slice(fromIndex + 1).forEach(stop => {
+          if (stop.stationName && stop.stationName !== 'Ukjent') {
+            toStationsSet.add(stop.stationName);
+          }
+        });
+      }
+    });
+
+    const toStations = Array.from(toStationsSet).map(name => ({ name, arrivalTime: '' }));
+    setAvailableToStations(toStations);
 
     // Reset downstream selections
     setSelectedDepartureTime("");
     setSelectedDeparture(null);
-    setAvailableToStations([]);
+    setAvailableDepartureTimes([]);
 
     // Update form
-    setFormData((prev) => ({ ...prev, fromStation: stationName }));
+    setFormData((prev) => ({ ...prev, fromStation: stationName, toStation: '', departureTime: '', arrivalDate: '', arrivalTime: '' }));
 
-    console.log(`[StationSelect] From: ${stationName}, found ${departureTimes.length} departure times`);
+    console.log(`[StationSelect] From: ${stationName}, found ${toStations.length} possible to-stations`);
   };
 
-  // Step 2: Handle departure time selection
+  // Step 3: Handle departure time selection (now sets arrival time too)
   const handleDepartureTimeSelect = (timeStr: string) => {
     setSelectedDepartureTime(timeStr);
 
@@ -199,126 +237,276 @@ function AddTicketPageContent() {
 
     setSelectedDeparture(matchingDep.departure);
 
-    // Get available to-stations (all stations AFTER from-station)
-    const toStations = getStationsAfter(matchingDep.departure, selectedFromStation);
-    setAvailableToStations(toStations);
+    // Find arrival time at the selected to-station
+    const toStop = matchingDep.departure.allStops.find(stop => stop.stationName === formData.toStation);
+    const arrTime = toStop?.arrivalTime ? new Date(toStop.arrivalTime) : null;
 
-    // Update form with departure time
-    const depTime = new Date(timeStr);
+    // Update form with departure and arrival times
+    // Parse time directly from ISO string to avoid timezone conversion issues
+    const depDate = timeStr.split("T")[0]; // "2025-11-18"
+    const depTimeMatch = timeStr.match(/T(\d{2}:\d{2})/); // Extract "23:46" from "2025-11-18T23:46:00+01:00"
+    const depTimeStr = depTimeMatch ? depTimeMatch[1] : "";
+
+    const arrDate = toStop?.arrivalTime ? toStop.arrivalTime.split("T")[0] : "";
+    const arrTimeMatch = toStop?.arrivalTime ? toStop.arrivalTime.match(/T(\d{2}:\d{2})/) : null;
+    const arrTimeStr = arrTimeMatch ? arrTimeMatch[1] : "";
+
+    const newFormData = {
+      departureDate: depDate,
+      departureTime: depTimeStr,
+      arrivalDate: arrDate,
+      arrivalTime: arrTimeStr,
+    };
+
+    console.log(`[TimeSelect] Raw times - Departure: ${timeStr}, Arrival: ${toStop?.arrivalTime}`);
+    console.log(`[TimeSelect] Setting form data:`, newFormData);
+
     setFormData((prev) => ({
       ...prev,
-      departureDate: timeStr.split("T")[0],
-      departureTime: depTime.toLocaleTimeString("no", { hour: "2-digit", minute: "2-digit" }),
+      ...newFormData
     }));
-
-    console.log(`[TimeSelect] Departure at ${timeStr}, ${toStations.length} stations available after ${selectedFromStation}`);
   };
 
-  // Step 3: Handle to-station selection
+  // Step 2: Handle to-station selection (now shows departure times)
   const handleToStationSelect = (stationName: string) => {
-    // Find arrival time for this station
-    const toStation = availableToStations.find(s => s.name === stationName);
-    if (!toStation) return;
-
-    // Update form with to-station and arrival time
-    const arrTime = toStation.arrivalTime ? new Date(toStation.arrivalTime) : null;
+    // Update form with to-station
     setFormData((prev) => ({
       ...prev,
       toStation: stationName,
-      arrivalDate: toStation.arrivalTime ? toStation.arrivalTime.split("T")[0] : "",
-      arrivalTime: arrTime ? arrTime.toLocaleTimeString("no", { hour: "2-digit", minute: "2-digit" }) : "",
     }));
 
-    console.log(`[StationSelect] To: ${stationName}, arrival: ${toStation.arrivalTime}`);
+    console.log(`[StationSelect] Filtering departures from "${selectedFromStation}" to "${stationName}"`);
+    console.log(`[StationSelect] Total departures to check:`, allDepartures.length);
+
+    // Find all departures that go from selectedFromStation to stationName
+    const relevantDepartures: Array<{time: string, departure: TrainLookupResult}> = [];
+
+    allDepartures.forEach((dep, depIdx) => {
+      const fromIndex = dep.allStops.findIndex(stop => stop.stationName === selectedFromStation);
+      const toIndex = dep.allStops.findIndex(stop => stop.stationName === stationName);
+
+      console.log(`[StationSelect] Departure ${depIdx + 1}: fromIndex=${fromIndex}, toIndex=${toIndex}`);
+
+      if (fromIndex === -1) {
+        console.log(`[StationSelect]   ✗ Doesn't stop at "${selectedFromStation}"`);
+        console.log(`[StationSelect]   All stops:`, dep.allStops.map(s => s.stationName).join(' → '));
+      } else if (toIndex === -1) {
+        console.log(`[StationSelect]   ✗ Doesn't stop at "${stationName}"`);
+        console.log(`[StationSelect]   All stops:`, dep.allStops.map(s => s.stationName).join(' → '));
+      } else if (fromIndex >= toIndex) {
+        console.log(`[StationSelect]   ✗ Wrong direction (from at ${fromIndex}, to at ${toIndex})`);
+      } else {
+        const fromStop = dep.allStops[fromIndex];
+        if (fromStop.departureTime) {
+          console.log(`[StationSelect]   ✓ Valid: departure at ${fromStop.departureTime}`);
+          relevantDepartures.push({
+            time: fromStop.departureTime,
+            departure: dep
+          });
+        } else {
+          console.log(`[StationSelect]   ✗ No departure time at ${selectedFromStation}`);
+        }
+      }
+    });
+
+    // Sort by departure time
+    relevantDepartures.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+    setAvailableDepartureTimes(relevantDepartures);
+
+    console.log(`[StationSelect] ===== SUMMARY =====`);
+    console.log(`[StationSelect] To: ${stationName}, found ${relevantDepartures.length} departure times`);
+    console.log(`[StationSelect] Departure times:`, relevantDepartures.map(d => d.time));
   };
 
-  // Station search handlers (TR-IM-310)
-
-  // Debounced station search
-  const handleStationSearch = useCallback(async (searchTerm: string) => {
-    setStationSearchTerm(searchTerm);
+  // Manual station autocomplete handlers
+  const handleFromStationSearch = async (searchTerm: string) => {
+    console.log('[FromStationSearch] Called with:', searchTerm, 'length:', searchTerm.trim().length);
 
     if (searchTerm.trim().length < 2) {
-      setStationSuggestions([]);
+      setFromStationSuggestions([]);
       return;
     }
 
-    setIsSearchingStations(true);
+    setIsSearchingFromStation(true);
     try {
       const suggestions = await searchStations(searchTerm);
-      setStationSuggestions(suggestions);
-      console.log(`[StationSearch] Found ${suggestions.length} stations for "${searchTerm}"`);
+      console.log('[FromStationSearch] Found suggestions:', suggestions.length);
+      setFromStationSuggestions(suggestions);
     } catch (error: any) {
-      console.error('[StationSearch] Error:', error);
-      showToast('Kunne ikke søke etter stasjoner', 'error');
+      console.error('[FromStationSearch] Error:', error);
     } finally {
-      setIsSearchingStations(false);
-    }
-  }, [showToast]);
-
-  // Handle station selection from autocomplete
-  const handleStationSelect = async (station: StationSuggestion) => {
-    setSelectedStation(station);
-    setStationSearchTerm(station.name);
-    setStationSuggestions([]);
-
-    // Validate date
-    if (!formData.departureDate) {
-      showToast('Vennligst velg avgangsdato først', 'error');
-      return;
-    }
-
-    // Load departures from this station
-    setIsLoadingDepartures(true);
-    try {
-      const departures = await getDeparturesFromStation(station.id, formData.departureDate);
-      setStationDepartures(departures);
-      console.log(`[StationDepartures] Found ${departures.length} departures from ${station.name}`);
-
-      if (departures.length === 0) {
-        showToast(`Ingen avganger funnet fra ${station.name} på ${formData.departureDate}`, 'info');
-      } else {
-        showToast(`Fant ${departures.length} avgang${departures.length > 1 ? 'er' : ''} fra ${station.name}`, 'success');
-      }
-    } catch (error: any) {
-      console.error('[StationDepartures] Error:', error);
-      showToast('Kunne ikke hente avganger', 'error');
-    } finally {
-      setIsLoadingDepartures(false);
+      setIsSearchingFromStation(false);
     }
   };
 
-  // Handle departure selection from station list
-  const handleDepartureSelect = async (departure: Departure) => {
-    console.log(`[DepartureSelect] Selected ${departure.trainNumber} to ${departure.destination}`);
+  const handleToStationSearch = async (searchTerm: string) => {
+    console.log('[ToStationSearch] Called with:', searchTerm, 'length:', searchTerm.trim().length);
 
-    // Fill in train number and trigger train lookup
-    setFormData((prev) => ({
-      ...prev,
-      trainNumber: departure.trainNumber,
-      operator: departure.operator,
-    }));
+    if (searchTerm.trim().length < 2) {
+      setToStationSuggestions([]);
+      return;
+    }
 
-    // Switch back to train number mode and trigger lookup
-    setSearchMode('trainNumber');
+    setIsSearchingToStation(true);
+    try {
+      const suggestions = await searchStations(searchTerm);
+      console.log('[ToStationSearch] Found suggestions:', suggestions.length);
+      setToStationSuggestions(suggestions);
+    } catch (error: any) {
+      console.error('[ToStationSearch] Error:', error);
+    } finally {
+      setIsSearchingToStation(false);
+    }
+  };
 
-    // Clear station search state
-    setStationSearchTerm('');
-    setStationSuggestions([]);
-    setSelectedStation(null);
-    setStationDepartures([]);
+  // Function to fetch departures when all required fields are set
+  const fetchManualDepartures = useCallback(async (fromStationId: string, toStationName: string, date: string) => {
+    console.log('[FetchManualDepartures] Fetching with:', { fromStationId, toStationName, date });
+    setIsLoadingManualDepartures(true);
+    try {
+      // Pass toStationName to filter departures to only trains that stop there
+      const departures = await getDeparturesFromStation(fromStationId, date, toStationName);
+      console.log('[FetchManualDepartures] API returned departures:', departures.length);
 
-    // Trigger train lookup with the selected train number
-    await performTrainLookup(departure.trainNumber, formData.departureDate);
+      setManualDepartures(departures);
+
+      if (departures.length > 0) {
+        showToast(`Fant ${departures.length} avgang${departures.length > 1 ? 'er' : ''} fra ${formData.fromStation} til ${toStationName}`, "success");
+      } else {
+        showToast(`Ingen avganger funnet fra ${formData.fromStation} til ${toStationName}. Fyll inn tidene manuelt.`, "info");
+      }
+    } catch (error: any) {
+      console.error('[FetchManualDepartures] Error:', error);
+      showToast("Kunne ikke hente avganger. Fyll inn tidene manuelt.", "error");
+    } finally {
+      setIsLoadingManualDepartures(false);
+    }
+  }, [showToast, formData.fromStation]);
+
+  // Watch for date changes - if we have both stations selected, fetch departures
+  // Debounced to avoid too many requests
+  useEffect(() => {
+    if ((!formData.trainNumber || isManualMode) && selectedFromStationId && formData.toStation && formData.departureDate) {
+      // Create unique key to prevent duplicate fetches
+      const fetchKey = `${selectedFromStationId}|${formData.toStation}|${formData.departureDate}`;
+
+      if (fetchKey === lastFetchKey) {
+        console.log('[useEffect] Already fetched this combination, skipping');
+        return;
+      }
+
+      console.log('[useEffect] All fields filled, will fetch departures after delay');
+
+      // Debounce: wait 1 second before fetching to avoid spamming API
+      const timeoutId = setTimeout(() => {
+        setLastFetchKey(fetchKey);
+        fetchManualDepartures(selectedFromStationId, formData.toStation, formData.departureDate);
+      }, 1000);
+
+      return () => clearTimeout(timeoutId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.departureDate, isManualMode, selectedFromStationId, formData.toStation]);
+
+  const handleSelectFromStation = (station: StationSuggestion) => {
+    console.log('[SelectFromStation] Station selected:', station.name, 'ID:', station.id);
+    setFormData((prev) => ({ ...prev, fromStation: station.name }));
+    setFromStationSuggestions([]);
+    setSelectedFromStationId(station.id);
+    setHighlightedFromIndex(-1);
+    setIsManualMode(true); // User is now in manual mode
+
+    // Clear previous departures when changing from-station
+    setManualDepartures([]);
+
+    // Don't fetch here - useEffect will handle it with debouncing
+  };
+
+  const handleSelectToStation = async (station: StationSuggestion) => {
+    console.log('[SelectToStation] Station selected:', station.name);
+    setFormData((prev) => ({ ...prev, toStation: station.name }));
+    setToStationSuggestions([]);
+    setHighlightedToIndex(-1);
+    setIsManualMode(true); // User is now in manual mode
+
+    // Don't fetch here - useEffect will handle it with debouncing
+  };
+
+  // Keyboard navigation for from-station
+  const handleFromStationKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (fromStationSuggestions.length === 0) return;
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setHighlightedFromIndex((prev) =>
+          prev < fromStationSuggestions.length - 1 ? prev + 1 : prev
+        );
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setHighlightedFromIndex((prev) => (prev > 0 ? prev - 1 : -1));
+        break;
+      case 'Enter':
+        e.preventDefault();
+        if (highlightedFromIndex >= 0 && highlightedFromIndex < fromStationSuggestions.length) {
+          handleSelectFromStation(fromStationSuggestions[highlightedFromIndex]);
+        }
+        break;
+      case 'Escape':
+        setFromStationSuggestions([]);
+        setHighlightedFromIndex(-1);
+        break;
+    }
+  };
+
+  // Keyboard navigation for to-station
+  const handleToStationKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (toStationSuggestions.length === 0) return;
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setHighlightedToIndex((prev) =>
+          prev < toStationSuggestions.length - 1 ? prev + 1 : prev
+        );
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setHighlightedToIndex((prev) => (prev > 0 ? prev - 1 : -1));
+        break;
+      case 'Enter':
+        e.preventDefault();
+        if (highlightedToIndex >= 0 && highlightedToIndex < toStationSuggestions.length) {
+          handleSelectToStation(toStationSuggestions[highlightedToIndex]);
+        }
+        break;
+      case 'Escape':
+        setToStationSuggestions([]);
+        setHighlightedToIndex(-1);
+        break;
+    }
   };
 
   // Extract train lookup logic for reuse
   const performTrainLookup = async (trainNumber: string, departureDate: string) => {
     setIsLookingUp(true);
     try {
+      console.log(`[Lookup] Searching for train ${trainNumber} on date ${departureDate}`);
+
       const departures = await lookupTrainByNumber({
         trainNumber,
         serviceDate: departureDate,
+      });
+
+      console.log(`[Lookup] API returned ${departures.length} departures`);
+
+      // Log first few departures to see what we got
+      departures.slice(0, 3).forEach((dep, idx) => {
+        console.log(`[Lookup] Departure ${idx + 1}:`, {
+          stops: dep.allStops.map(s => s.stationName).join(' → '),
+          firstDepartureTime: dep.allStops.find(s => s.departureTime)?.departureTime,
+        });
       });
 
       setAllDepartures(departures);
@@ -362,8 +550,8 @@ function AddTicketPageContent() {
       return;
     }
 
-    // Validate required fields
-    if (!formData.operator || !formData.trainNumber || !formData.departureDate || !formData.departureTime || !formData.fromStation || !formData.toStation) {
+    // Validate required fields (trainNumber is optional in manual mode)
+    if (!formData.operator || !formData.departureDate || !formData.departureTime || !formData.fromStation || !formData.toStation) {
       showToast("Vennligst fyll ut alle påkrevde felter", "error");
       return;
     }
@@ -413,7 +601,7 @@ function AddTicketPageContent() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 py-8 px-4">
+    <div className="min-h-screen bg-slate-300 py-8 px-4">
       {ToastComponent}
 
       <div className="max-w-2xl mx-auto">
@@ -427,7 +615,7 @@ function AddTicketPageContent() {
           </button>
           <h1 className="text-3xl font-bold text-slate-900">Legg til billett</h1>
           <p className="text-slate-600 mt-2">
-            Fyll ut billett-informasjonen manuelt
+            Velg stasjoner og avgangstidspunkt
           </p>
         </div>
 
@@ -437,12 +625,13 @@ function AddTicketPageContent() {
             {/* Operator */}
             <div>
               <label className="block text-sm font-medium text-slate-900 mb-2">
-                Operator (fylles automatisk ved oppslag)
+                Operator <span className="text-rose-500">*</span>
               </label>
               <select
                 name="operator"
                 value={formData.operator}
                 onChange={handleChange}
+                required
                 className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
                 <option value="">Velg operator</option>
@@ -455,147 +644,20 @@ function AddTicketPageContent() {
               </select>
             </div>
 
-            {/* Search Mode Toggle (TR-IM-310) */}
-            <div className="bg-slate-100 border border-slate-300 rounded-lg p-4">
-              <label className="block text-sm font-medium text-slate-900 mb-3">
-                Søkemåte
+            {/* Train Number */}
+            <div>
+              <label className="block text-sm font-medium text-slate-900 mb-2">
+                Tognummer
               </label>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setSearchMode('trainNumber')}
-                  className={`flex-1 px-4 py-2 rounded-lg font-medium transition ${
-                    searchMode === 'trainNumber'
-                      ? 'bg-primary-600 text-white'
-                      : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50'
-                  }`}
-                >
-                  Tognummer
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSearchMode('station')}
-                  className={`flex-1 px-4 py-2 rounded-lg font-medium transition ${
-                    searchMode === 'station'
-                      ? 'bg-primary-600 text-white'
-                      : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50'
-                  }`}
-                >
-                  Stasjon
-                </button>
-              </div>
+              <input
+                type="text"
+                name="trainNumber"
+                value={formData.trainNumber}
+                onChange={handleChange}
+                placeholder="Fylles automatisk når du velger avgang"
+                className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
             </div>
-
-            {/* Train Number (only show if train number mode) */}
-            {searchMode === 'trainNumber' && (
-              <div>
-                <label className="block text-sm font-medium text-slate-900 mb-2">
-                  Tognummer <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  name="trainNumber"
-                  value={formData.trainNumber}
-                  onChange={handleChange}
-                  required
-                  placeholder="F.eks. R20, L14, IC801"
-                  className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
-            )}
-
-            {/* Station Search (only show if station mode) */}
-            {searchMode === 'station' && (
-              <div className="space-y-4">
-                <div className="relative">
-                  <label className="block text-sm font-medium text-slate-900 mb-2">
-                    Søk etter stasjon <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={stationSearchTerm}
-                    onChange={(e) => handleStationSearch(e.target.value)}
-                    placeholder="Begynn å skrive stasjonsnavn..."
-                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  />
-
-                  {/* Autocomplete suggestions */}
-                  {stationSuggestions.length > 0 && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-slate-300 rounded-lg shadow-lg max-h-64 overflow-y-auto">
-                      {stationSuggestions.map((suggestion) => (
-                        <button
-                          key={suggestion.id}
-                          type="button"
-                          onClick={() => handleStationSelect(suggestion)}
-                          className="w-full text-left px-4 py-3 hover:bg-slate-50 transition border-b border-slate-200 last:border-b-0"
-                        >
-                          <div className="font-medium text-slate-900">{suggestion.name}</div>
-                          {suggestion.locality && (
-                            <div className="text-sm text-slate-600">{suggestion.locality}</div>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {isSearchingStations && (
-                    <div className="absolute right-3 top-11 text-slate-400">
-                      Søker...
-                    </div>
-                  )}
-                </div>
-
-                {/* Station departures list */}
-                {isLoadingDepartures && (
-                  <div className="text-center py-8 text-slate-600">
-                    Laster avganger...
-                  </div>
-                )}
-
-                {stationDepartures.length > 0 && (
-                  <div>
-                    <h3 className="text-sm font-medium text-slate-900 mb-3">
-                      Avganger fra {selectedStation?.name} ({stationDepartures.length})
-                    </h3>
-                    <div className="space-y-2 max-h-96 overflow-y-auto">
-                      {stationDepartures.map((departure, idx) => (
-                        <button
-                          key={`${departure.serviceJourneyId}-${idx}`}
-                          type="button"
-                          onClick={() => handleDepartureSelect(departure)}
-                          className="w-full text-left px-4 py-3 border border-slate-300 rounded-lg hover:bg-slate-50 hover:border-primary-500 transition"
-                        >
-                          <div className="flex justify-between items-start mb-1">
-                            <div className="font-bold text-lg text-primary-600">
-                              {departure.trainNumber}
-                            </div>
-                            <div className="text-sm font-medium text-slate-900">
-                              {new Date(departure.departureTime).toLocaleTimeString('no', {
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })}
-                            </div>
-                          </div>
-                          <div className="text-sm text-slate-700 mb-1">
-                            → {departure.destination}
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <div className="text-xs text-slate-600">
-                              {departure.operator}
-                            </div>
-                            {departure.platform && (
-                              <div className="text-xs text-slate-600">
-                                Spor {departure.platform}
-                              </div>
-                            )}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
 
             {/* Departure Date & Time */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -626,9 +688,8 @@ function AddTicketPageContent() {
               </div>
             </div>
 
-            {/* Train Lookup Button (TR-IM-303) - Only in trainNumber mode */}
-            {searchMode === 'trainNumber' && (
-              <div className="bg-primary-50 border border-primary-200 rounded-lg p-4">
+            {/* Train Lookup Button (TR-IM-303) - REMOVED */}
+              {/* <div className="bg-primary-50 border border-primary-200 rounded-lg p-4">
               <div className="flex items-start gap-3">
                 <span className="text-xl">=</span>
                 <div className="flex-1">
@@ -636,7 +697,7 @@ function AddTicketPageContent() {
                     Automatisk utfylling fra Entur
                   </p>
                   <p className="text-xs text-primary-700 mb-3">
-                    Vi fyller inn operator, strekning og avgangstid automatisk. Du kan justere feltene etterpaa hvis nodvendig.
+                    Vi fyller inn operator, strekning og avgangstid automatisk. Du kan justere feltene etterpå hvis nødvendig.
                   </p>
                   <Button
                     type="button"
@@ -645,12 +706,11 @@ function AddTicketPageContent() {
                     onClick={handleTrainLookup}
                     disabled={isLookingUp || !formData.trainNumber || !formData.departureDate}
                   >
-                    {isLookingUp ? "Soker..." : "Hent strekning"}
+                    {isLookingUp ? "Søker..." : "Hent strekning"}
                   </Button>
                 </div>
               </div>
-            </div>
-            )}
+            </div> */}
 
             {/* Arrival Date & Time (optional) */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -680,6 +740,217 @@ function AddTicketPageContent() {
               </div>
             </div>
 
+            {/* Manual Station Input (if no train number OR in manual mode) */}
+            {(() => {
+              console.log('[RENDER] isManualMode:', isManualMode, 'trainNumber:', formData.trainNumber, 'fromStation:', formData.fromStation, 'toStation:', formData.toStation);
+              return null;
+            })()}
+            {(!formData.trainNumber || isManualMode) && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* From Station */}
+                <div className="relative">
+                  <label className="block text-sm font-medium text-slate-900 mb-2">
+                    Fra-stasjon <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="fromStation"
+                    value={formData.fromStation}
+                    onChange={(e) => {
+                      handleChange(e);
+                      handleFromStationSearch(e.target.value);
+                    }}
+                    onKeyDown={handleFromStationKeyDown}
+                    placeholder="Begynn å skrive stasjonsnavn..."
+                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+
+                  {/* From station autocomplete */}
+                  {fromStationSuggestions.length > 0 && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-slate-300 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                      {fromStationSuggestions.map((suggestion, idx) => (
+                        <button
+                          key={suggestion.id}
+                          type="button"
+                          onClick={() => handleSelectFromStation(suggestion)}
+                          className={`w-full text-left px-4 py-3 transition border-b border-slate-200 last:border-b-0 ${
+                            idx === highlightedFromIndex
+                              ? 'bg-primary-50 border-primary-200'
+                              : 'hover:bg-slate-50'
+                          }`}
+                        >
+                          <div className="font-medium text-slate-900">{suggestion.name}</div>
+                          {suggestion.locality && (
+                            <div className="text-sm text-slate-600">{suggestion.locality}</div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {isSearchingFromStation && (
+                    <div className="absolute right-3 top-11 text-slate-400">
+                      Søker...
+                    </div>
+                  )}
+                </div>
+
+                {/* To Station */}
+                <div className="relative">
+                  <label className="block text-sm font-medium text-slate-900 mb-2">
+                    Til-stasjon <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="toStation"
+                    value={formData.toStation}
+                    onChange={(e) => {
+                      handleChange(e);
+                      handleToStationSearch(e.target.value);
+                    }}
+                    onKeyDown={handleToStationKeyDown}
+                    placeholder="Begynn å skrive stasjonsnavn..."
+                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+
+                  {/* To station autocomplete */}
+                  {toStationSuggestions.length > 0 && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-slate-300 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                      {toStationSuggestions.map((suggestion, idx) => (
+                        <button
+                          key={suggestion.id}
+                          type="button"
+                          onClick={() => handleSelectToStation(suggestion)}
+                          className={`w-full text-left px-4 py-3 transition border-b border-slate-200 last:border-b-0 ${
+                            idx === highlightedToIndex
+                              ? 'bg-primary-50 border-primary-200'
+                              : 'hover:bg-slate-50'
+                          }`}
+                        >
+                          <div className="font-medium text-slate-900">{suggestion.name}</div>
+                          {suggestion.locality && (
+                            <div className="text-sm text-slate-600">{suggestion.locality}</div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {isSearchingToStation && (
+                    <div className="absolute right-3 top-11 text-slate-400">
+                      Søker...
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Manual departures list (when stations selected manually) */}
+            {(!formData.trainNumber || isManualMode) && manualDepartures.length > 0 && (() => {
+              const filteredDepartures = manualDepartures.filter((dep) => {
+                if (!departureFilter) return true;
+                const search = departureFilter.toLowerCase();
+                return (
+                  dep.trainNumber.toLowerCase().includes(search) ||
+                  dep.destination.toLowerCase().includes(search) ||
+                  formData.toStation.toLowerCase().includes(search)
+                );
+              });
+
+              return (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <h3 className="text-sm font-semibold text-green-900 mb-3">
+                  Avganger fra {formData.fromStation} til {formData.toStation} ({filteredDepartures.length}{departureFilter && ` av ${manualDepartures.length}`})
+                </h3>
+
+                {/* Filter field */}
+                <div className="mb-3">
+                  <input
+                    type="text"
+                    placeholder="Søk etter tognummer eller destinasjon..."
+                    value={departureFilter}
+                    onChange={(e) => setDepartureFilter(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-green-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {filteredDepartures.length === 0 ? (
+                    <div className="text-center text-sm text-green-700 py-4">
+                      Ingen avganger matcher søket
+                    </div>
+                  ) : (
+                    filteredDepartures.map((dep, idx) => (
+                    <button
+                      key={`${dep.serviceJourneyId}-${idx}`}
+                      type="button"
+                      onClick={() => {
+                        const depTime = new Date(dep.departureTime);
+
+                        const normalizedOperator = normalizeOperatorName(dep.operator);
+
+                        console.log('[DepartureSelected] BEFORE update - isManualMode:', isManualMode);
+                        console.log('[DepartureSelected] Filling in:', {
+                          trainNumber: dep.trainNumber,
+                          operatorFromAPI: dep.operator,
+                          normalizedOperator: normalizedOperator,
+                          date: dep.departureTime.split("T")[0],
+                          time: depTime.toLocaleTimeString("no", { hour: "2-digit", minute: "2-digit" })
+                        });
+                        console.log('[DepartureSelected] Available operators in dropdown:', commonOperators);
+
+                        // Fill in train number and operator too
+                        setFormData((prev) => ({
+                          ...prev,
+                          trainNumber: dep.trainNumber,
+                          operator: normalizedOperator,
+                          departureDate: dep.departureTime.split("T")[0],
+                          departureTime: depTime.toLocaleTimeString("no", { hour: "2-digit", minute: "2-digit" }),
+                          // Keep fromStation and toStation as they are (already set by user)
+                        }));
+
+                        // Clear manual departures list after selection
+                        setManualDepartures([]);
+                        setDepartureFilter('');
+
+                        console.log('[DepartureSelected] AFTER update - isManualMode should still be:', isManualMode);
+
+                        // Scroll to the form section so user sees the filled fields
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+
+                        showToast("Billett-info fylt inn! Fyll inn ankomsttid manuelt.", "success");
+                      }}
+                      className="w-full text-left px-3 py-2 bg-white border border-green-300 rounded-lg hover:bg-green-50 hover:border-green-500 transition"
+                    >
+                      <div className="flex justify-between items-start mb-1">
+                        <div className="font-bold text-sm text-green-800">
+                          {dep.trainNumber} fra {formData.fromStation} → {dep.destination}
+                        </div>
+                        <div className="text-sm font-medium text-green-900">
+                          {new Date(dep.departureTime).toLocaleTimeString('no', {
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </div>
+                      </div>
+                      <div className="text-xs text-green-700">
+                        {dep.operator}
+                        {dep.platform && ` • Spor ${dep.platform}`}
+                      </div>
+                    </button>
+                  ))
+                  )}
+                </div>
+              </div>
+              );
+            })()}
+
+            {isLoadingManualDepartures && (
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-center">
+                <p className="text-sm text-slate-600">Søker etter avganger...</p>
+              </div>
+            )}
+
             {/* New flow: Step-by-step selection */}
             {allStations.length > 0 && (
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -706,32 +977,11 @@ function AddTicketPageContent() {
                   </select>
                 </div>
 
-                {/* Step 2: Select DEPARTURE TIME */}
-                {availableDepartureTimes.length > 0 && (
+                {/* Step 2: Select TO station */}
+                {availableToStations.length > 0 && (
                   <div className="mb-4">
                     <label className="block text-xs font-medium text-blue-900 mb-2">
-                      2. Avgangstid fra {selectedFromStation}
-                    </label>
-                    <select
-                      value={selectedDepartureTime}
-                      onChange={(e) => handleDepartureTimeSelect(e.target.value)}
-                      className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                    >
-                      <option value="">-- Velg avgangstid --</option>
-                      {availableDepartureTimes.map((dt, idx) => (
-                        <option key={idx} value={dt.time}>
-                          {new Date(dt.time).toLocaleTimeString("no", { hour: "2-digit", minute: "2-digit" })} → {dt.departure.toStationName}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {/* Step 3: Select TO station */}
-                {availableToStations.length > 0 && (
-                  <div className="mb-2">
-                    <label className="block text-xs font-medium text-blue-900 mb-2">
-                      3. Til stasjon
+                      2. Til stasjon
                     </label>
                     <select
                       value={formData.toStation}
@@ -742,7 +992,27 @@ function AddTicketPageContent() {
                       {availableToStations.map((station, idx) => (
                         <option key={idx} value={station.name}>
                           {station.name}
-                          {station.arrivalTime && ` (ank. ${new Date(station.arrivalTime).toLocaleTimeString("no", { hour: "2-digit", minute: "2-digit" })})`}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Step 3: Select DEPARTURE TIME */}
+                {availableDepartureTimes.length > 0 && formData.toStation && (
+                  <div className="mb-2">
+                    <label className="block text-xs font-medium text-blue-900 mb-2">
+                      3. Avgangstid ({selectedFromStation} → {formData.toStation})
+                    </label>
+                    <select
+                      value={selectedDepartureTime}
+                      onChange={(e) => handleDepartureTimeSelect(e.target.value)}
+                      className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    >
+                      <option value="">-- Velg avgangstid --</option>
+                      {availableDepartureTimes.map((dt, idx) => (
+                        <option key={idx} value={dt.time}>
+                          {new Date(dt.time).toLocaleTimeString("no", { hour: "2-digit", minute: "2-digit" })} (ank. {dt.departure.allStops.find(s => s.stationName === formData.toStation)?.arrivalTime ? new Date(dt.departure.allStops.find(s => s.stationName === formData.toStation)!.arrivalTime!).toLocaleTimeString("no", { hour: "2-digit", minute: "2-digit" }) : "N/A"})
                         </option>
                       ))}
                     </select>
@@ -750,36 +1020,6 @@ function AddTicketPageContent() {
                 )}
               </div>
             )}
-
-            {/* From & To Stations (manual input fallback) */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-900 mb-2">
-                  Fra-stasjon {allStations.length > 0 ? "(eller juster manuelt)" : "(fylles ved oppslag)"}
-                </label>
-                <input
-                  type="text"
-                  name="fromStation"
-                  value={formData.fromStation}
-                  onChange={handleChange}
-                  placeholder="F.eks. Oslo S"
-                  className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-900 mb-2">
-                  Til-stasjon {allStations.length > 0 ? "(eller juster manuelt)" : "(fylles ved oppslag)"}
-                </label>
-                <input
-                  type="text"
-                  name="toStation"
-                  value={formData.toStation}
-                  onChange={handleChange}
-                  placeholder="F.eks. Trondheim S"
-                  className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
-            </div>
 
             {/* Optional fields */}
             <div className="border-t border-slate-200 pt-6">
@@ -880,10 +1120,10 @@ function AddTicketPageContent() {
             <div className="text-sm text-slate-600">
               <p className="font-medium text-slate-900 mb-1">Slik bruker du skjemaet</p>
               <ul className="space-y-1 list-disc list-inside">
-                <li>Fyll inn tognummer og dato, klikk "Hent strekning" for automatisk utfylling</li>
-                <li>Eller fyll inn alle feltene manuelt hvis du vil</li>
-                <li>Ankomsttid, passasjernavn og pris er valgfri</li>
-                <li>Du kan ogsa skanne QR-kode pa Billetter-siden</li>
+                <li><strong>Med tognummer:</strong> Fyll inn tognummer og dato → Klikk "Hent strekning" → Velg fra-stasjon → til-stasjon → avgangstid</li>
+                <li><strong>Uten tognummer:</strong> Fyll inn avgangsdato → Skriv fra-stasjon og til-stasjon (autocomplete) → Velg fra listen over tilgjengelige avganger</li>
+                <li>Du kan også fylle inn avgangstid og ankomsttid manuelt hvis du vil</li>
+                <li>Passasjernavn, seteinformasjon og pris er valgfrie felt</li>
               </ul>
             </div>
           </div>
