@@ -19,7 +19,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="no">
-      <body className="antialiased">
+      <body className="antialiased bg-slate-300">
         <Navigation />
         {children}
       </body>
