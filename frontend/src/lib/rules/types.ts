@@ -41,6 +41,9 @@ export interface RuleInput {
 
   /** Distance band classification (future enhancement) */
   distanceBand?: DistanceBand;
+
+  /** Line code for identifying specific routes (TR-RU-502) */
+  lineCode?: string; // e.g., "F6", "F7", "R10", "Oslo-Bergen"
 }
 
 /**

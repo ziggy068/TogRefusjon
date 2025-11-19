@@ -1,8 +1,11 @@
 /**
- * Rule Engine Entry Point (TR-RU-501)
+ * Rule Engine Entry Point (TR-RU-501 + TR-RU-502)
  *
  * Provides a clean API for evaluating compensation claims from domain models.
  * This file maps Ticket/JourneyInstance/DelayResult → RuleInput → RuleOutcome.
+ *
+ * Uses combined evaluation (TR-RU-502) that selects the best compensation
+ * between EU base rules and operator-specific Norwegian rules.
  */
 
 import { Ticket } from '../tickets/types';
@@ -14,6 +17,7 @@ import {
   calculateCompensationAmount,
   formatOutcomeSummary,
 } from './baseRules';
+import { evaluateWithOperatorRules } from './combined';
 
 /**
  * Evaluate claim from domain models
@@ -47,10 +51,14 @@ export function evaluateClaimFromDomainModels(params: {
     // Distance band not implemented yet - could be calculated from fromStopPlaceId/toStopPlaceId
     // or extracted from ticket metadata in future
     distanceBand: undefined,
+
+    // Line code from ticket (e.g., "F6", "R10") - helps identify long-distance trains
+    lineCode: ticket.trainNumber, // Train number often indicates line (TODO: improve mapping)
   };
 
-  // Evaluate compensation using base rules
-  return evaluateBaseCompensation(ruleInput);
+  // Evaluate compensation using combined rules (EU base + Norwegian operator overrides)
+  // This ensures we always give the BEST compensation available
+  return evaluateWithOperatorRules(ruleInput);
 }
 
 /**
@@ -102,3 +110,6 @@ export function getClaimSummary(params: {
 // Re-export types and functions for external use
 export * from './types';
 export * from './baseRules';
+export * from './operatorSchemas';
+export * from './operatorRules';
+export * from './combined';

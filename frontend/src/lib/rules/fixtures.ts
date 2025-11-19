@@ -245,9 +245,106 @@ export const testCase_Unknown: {
 };
 
 /**
- * All test cases
+ * Test Case 8: Vy regional train 35 min delay (TR-RU-502)
+ * EU: 0% (below 60 min threshold)
+ * Operator: 50% (Vy gives 50% at 30 min)
+ * Expected: 50% (operator wins)
+ */
+export const testCase_VyRegional35Min: {
+  ticket: Ticket;
+  journey: JourneyInstance;
+  delay: DelayResult;
+} = {
+  ticket: { ...baseTicket, id: 'ticket-vy-regional', operator: 'Vy', trainNumber: 'R10', priceNOK: 250 },
+  journey: {
+    ...baseJourney,
+    operator: 'Vy',
+    trainNumber: 'R10',
+    delayMinutesArrival: 35,
+    actualArrivalUTC: timestampFromNow(35),
+  },
+  delay: {
+    journeyInstanceId: 'journey-vy-regional',
+    trainNumber: 'R10',
+    operator: 'Vy',
+    plannedArrivalTime: timestampFromNow(0).toDate().toISOString(),
+    actualArrivalTime: timestampFromNow(35).toDate().toISOString(),
+    arrivalDelayMinutes: 35,
+    status: 'DELAYED',
+    checkedAt: new Date().toISOString(),
+    message: '35 minutes delay on Vy regional train',
+  },
+};
+
+/**
+ * Test Case 9: Vy long-distance 70 min delay (TR-RU-502)
+ * EU: 25% (60-119 min range)
+ * Operator: 50% (Vy long-distance gives 50% at 60 min)
+ * Expected: 50% (operator wins)
+ */
+export const testCase_VyLongDistance70Min: {
+  ticket: Ticket;
+  journey: JourneyInstance;
+  delay: DelayResult;
+} = {
+  ticket: { ...baseTicket, id: 'ticket-vy-ld', operator: 'Vy', trainNumber: 'F6', priceNOK: 900 },
+  journey: {
+    ...baseJourney,
+    operator: 'Vy',
+    trainNumber: 'F6',
+    delayMinutesArrival: 70,
+    actualArrivalUTC: timestampFromNow(70),
+  },
+  delay: {
+    journeyInstanceId: 'journey-vy-ld',
+    trainNumber: 'F6',
+    operator: 'Vy',
+    plannedArrivalTime: timestampFromNow(0).toDate().toISOString(),
+    actualArrivalTime: timestampFromNow(70).toDate().toISOString(),
+    arrivalDelayMinutes: 70,
+    status: 'DELAYED',
+    checkedAt: new Date().toISOString(),
+    message: '70 minutes delay on Vy long-distance train',
+  },
+};
+
+/**
+ * Test Case 10: Unknown operator 70 min delay (TR-RU-502)
+ * EU: 25% (60-119 min range)
+ * Operator: N/A (no override)
+ * Expected: 25% (EU base rules)
+ */
+export const testCase_UnknownOp70Min: {
+  ticket: Ticket;
+  journey: JourneyInstance;
+  delay: DelayResult;
+} = {
+  ticket: { ...baseTicket, id: 'ticket-unknown-op', operator: 'Unknown Railways', trainNumber: 'X99', priceNOK: 500 },
+  journey: {
+    ...baseJourney,
+    operator: 'Unknown Railways',
+    trainNumber: 'X99',
+    delayMinutesArrival: 70,
+    actualArrivalUTC: timestampFromNow(70),
+  },
+  delay: {
+    journeyInstanceId: 'journey-unknown-op',
+    trainNumber: 'X99',
+    operator: 'Unknown Railways',
+    plannedArrivalTime: timestampFromNow(0).toDate().toISOString(),
+    actualArrivalTime: timestampFromNow(70).toDate().toISOString(),
+    arrivalDelayMinutes: 70,
+    status: 'DELAYED',
+    checkedAt: new Date().toISOString(),
+    message: '70 minutes delay on unknown operator',
+  },
+};
+
+/**
+ * All test cases (TR-RU-501 + TR-RU-502)
  */
 export const ALL_TEST_CASES = [
+  // Base EU rules (TR-RU-501)
   { name: 'No delay (30 min)', ...testCase_NoDelay },
   { name: 'Moderate delay (75 min, 25%)', ...testCase_ModerateDelay },
   { name: 'High delay (150 min, 50%)', ...testCase_HighDelay },
@@ -255,6 +352,11 @@ export const ALL_TEST_CASES = [
   { name: 'Cancelled (50%)', ...testCase_Cancelled },
   { name: 'Cancelled + force majeure (no comp)', ...testCase_CancelledForceMajeure },
   { name: 'Unknown delay', ...testCase_Unknown },
+
+  // Operator overrides (TR-RU-502)
+  { name: 'Vy regional 35 min (50% override)', ...testCase_VyRegional35Min },
+  { name: 'Vy long-distance 70 min (50% override)', ...testCase_VyLongDistance70Min },
+  { name: 'Unknown operator 70 min (25% EU base)', ...testCase_UnknownOp70Min },
 ];
 
 /**
