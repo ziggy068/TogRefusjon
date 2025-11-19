@@ -27,6 +27,7 @@ export interface Departure {
  */
 export async function searchStations(searchTerm: string): Promise<StationSuggestion[]> {
   if (!searchTerm || searchTerm.trim().length < 2) {
+    console.log('[searchStations] Term too short:', searchTerm);
     return [];
   }
 
@@ -36,10 +37,12 @@ export async function searchStations(searchTerm: string): Promise<StationSuggest
   try {
     const params = new URLSearchParams({
       text: searchTerm.trim(),
-      size: '10',
+      size: '15',
       layers: 'venue', // venue = stations/stops
       'boundary.country': 'NOR',
     });
+
+    console.log('[searchStations] Fetching:', `${GEOCODER_URL}?${params}`);
 
     const response = await fetch(`${GEOCODER_URL}?${params}`, {
       headers: {
@@ -53,17 +56,14 @@ export async function searchStations(searchTerm: string): Promise<StationSuggest
 
     const data = await response.json();
     const features = data.features || [];
+    console.log('[searchStations] API returned features:', features.length);
 
-    // Filter to only rail stations and convert to our format
+    // Filter to only rail stations based on category
     const railStations = features
       .filter((feature: any) => {
-        const name = feature.properties?.name?.toLowerCase() || '';
         const category = feature.properties?.category || [];
-        return (
-          name.includes('stasjon') ||
-          name.includes('station') ||
-          category.includes('railStation')
-        );
+        // Only include venues categorized as railStation
+        return category.includes('railStation');
       })
       .map((feature: any) => ({
         id: feature.properties?.id || '',
@@ -71,6 +71,7 @@ export async function searchStations(searchTerm: string): Promise<StationSuggest
         locality: feature.properties?.locality || feature.properties?.county,
       }));
 
+    console.log('[searchStations] Filtered rail stations:', railStations.length);
     return railStations;
   } catch (error: any) {
     console.error('[StationSearch] Error searching stations:', error);
@@ -83,91 +84,51 @@ export async function searchStations(searchTerm: string): Promise<StationSuggest
  *
  * @param stationId - NSR ID of the station (e.g., "NSR:StopPlace:548")
  * @param date - Date in YYYY-MM-DD format
+ * @param toStation - Optional: filter to only trains that stop at this station
  * @returns List of train departures
  */
 export async function getDeparturesFromStation(
   stationId: string,
-  date: string
+  date: string,
+  toStation?: string
 ): Promise<Departure[]> {
-  const DEPARTURES_QUERY = `
-    query GetDepartures($stopPlaceId: String!, $startTime: DateTime!, $numberOfDepartures: Int!) {
-      stopPlace(id: $stopPlaceId) {
-        id
-        name
-        estimatedCalls(startTime: $startTime, numberOfDepartures: $numberOfDepartures, timeRange: 86400) {
-          aimedDepartureTime
-          expectedDepartureTime
-          cancellation
-          quay {
-            publicCode
-          }
-          destinationDisplay {
-            frontText
-          }
-          serviceJourney {
-            id
-            line {
-              publicCode
-              transportMode
-              authority {
-                name
-              }
-            }
-          }
-        }
-      }
-    }
-  `;
-
-  // Calculate timezone offset
-  const offset = getNorwegianTimezoneOffset(date);
-  const startTime = `${date}T00:00:00${offset}`;
+  console.log('[getDeparturesFromStation] Fetching departures for:', {
+    stationId,
+    date,
+    toStation
+  });
 
   try {
-    const response = await enturQuery<{
-      stopPlace: {
-        id: string;
-        name: string;
-        estimatedCalls: Array<{
-          aimedDepartureTime: string;
-          expectedDepartureTime?: string;
-          cancellation: boolean;
-          quay?: {
-            publicCode?: string;
-          };
-          destinationDisplay?: {
-            frontText?: string;
-          };
-          serviceJourney: {
-            id: string;
-            line: {
-              publicCode: string;
-              transportMode?: string;
-              authority?: {
-                name?: string;
-              };
-            };
-          };
-        }>;
-      };
-    }>(DEPARTURES_QUERY, {
-      stopPlaceId: stationId,
-      startTime,
-      numberOfDepartures: 200,
-    });
+    // Call our API route instead of calling Entur directly (CORS workaround)
+    let url = `/api/entur/departures?stationId=${encodeURIComponent(stationId)}&date=${encodeURIComponent(date)}`;
+    if (toStation) {
+      url += `&toStation=${encodeURIComponent(toStation)}`;
+    }
+    const response = await fetch(url);
 
-    if (!response.stopPlace) {
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+      console.error('[StationDepartures] API error:', error);
       return [];
     }
 
-    // Filter to only trains (rail transport mode)
-    const trainDepartures = response.stopPlace.estimatedCalls.filter(
-      (call) =>
+    const data = await response.json();
+
+    if (!data.stopPlace) {
+      console.log('[StationDepartures] No stopPlace in response');
+      return [];
+    }
+
+    // Filter to only rail transport and non-cancelled
+    const trainDepartures = data.stopPlace.estimatedCalls.filter(
+      (call: any) =>
         call.serviceJourney.line.transportMode === 'rail' &&
         !call.cancellation
     );
 
-    return trainDepartures.map((call) => ({
+    console.log('[StationDepartures] Found train departures:', trainDepartures.length);
+
+    return trainDepartures.map((call: any) => ({
       trainNumber: call.serviceJourney.line.publicCode,
       operator: call.serviceJourney.line.authority?.name || 'Ukjent',
       destination: call.destinationDisplay?.frontText || 'Ukjent',
